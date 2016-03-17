@@ -22,6 +22,7 @@ add_subdirectory(CalculateDistances)
 add_subdirectory(CompareDistances)
 add_subdirectory(SaveFiducialList)
 add_subdirectory(vtkModel)
+add_subdirectory(surgeonEyeView)
 ## NEXT_MODULE
 
 #-----------------------------------------------------------------------------
