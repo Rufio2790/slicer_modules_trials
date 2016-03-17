@@ -5,17 +5,17 @@ from slicer.ScriptedLoadableModule import *
 import logging
 
 #
-# surgeonEyeView
+# MIPonPlane
 #
 
-class surgeonEyeView(ScriptedLoadableModule):
+class MIPonPlane(ScriptedLoadableModule):
   """Uses ScriptedLoadableModule base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
   """
 
   def __init__(self, parent):
     ScriptedLoadableModule.__init__(self, parent)
-    self.parent.title = "surgeonEyeView" # TODO make this more human readable by adding spaces
+    self.parent.title = "MIPonPlane" # TODO make this more human readable by adding spaces
     self.parent.categories = ["TestModules"]
     self.parent.dependencies = []
     self.parent.contributors = ["John Doe (AnyWare Corp.)"] # replace with "Firstname Lastname (Organization)"
@@ -29,10 +29,10 @@ class surgeonEyeView(ScriptedLoadableModule):
 """ # replace with organization, grant and thanks.
 
 #
-# surgeonEyeViewWidget
+# MIPonPlaneWidget
 #
 
-class surgeonEyeViewWidget(ScriptedLoadableModuleWidget):
+class MIPonPlaneWidget(ScriptedLoadableModuleWidget):
   """Uses ScriptedLoadableModuleWidget base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
   """
@@ -127,16 +127,16 @@ class surgeonEyeViewWidget(ScriptedLoadableModuleWidget):
     self.applyButton.enabled = self.inputSelector.currentNode() and self.outputSelector.currentNode()
 
   def onApplyButton(self):
-    logic = surgeonEyeViewLogic()
+    logic = MIPonPlaneLogic()
     enableScreenshotsFlag = self.enableScreenshotsFlagCheckBox.checked
     imageThreshold = self.imageThresholdSliderWidget.value
     logic.run(self.inputSelector.currentNode(), self.outputSelector.currentNode(), imageThreshold, enableScreenshotsFlag)
 
 #
-# surgeonEyeViewLogic
+# MIPonPlaneLogic
 #
 
-class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
+class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
   """This class should implement all the actual
   computation done by your module.  The interface
   should be such that other python code can import
@@ -227,14 +227,14 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
 
     # Capture screenshot
     if enableScreenshots:
-      self.takeScreenshot('surgeonEyeViewTest-Start','MyScreenshot',-1)
+      self.takeScreenshot('MIPonPlaneTest-Start','MyScreenshot',-1)
 
     logging.info('Processing completed')
 
     return True
 
 
-class surgeonEyeViewTest(ScriptedLoadableModuleTest):
+class MIPonPlaneTest(ScriptedLoadableModuleTest):
   """
   This is the test case for your scripted module.
   Uses ScriptedLoadableModuleTest base class, available at:
@@ -250,9 +250,9 @@ class surgeonEyeViewTest(ScriptedLoadableModuleTest):
     """Run as few or as many tests as needed here.
     """
     self.setUp()
-    self.test_surgeonEyeView1()
+    self.test_MIPonPlane1()
 
-  def test_surgeonEyeView1(self):
+  def test_MIPonPlane1(self):
     """ Ideally you should have several levels of tests.  At the lowest level
     tests should exercise the functionality of the logic with different inputs
     (both valid and invalid).  At higher levels your tests should emulate the
@@ -284,6 +284,6 @@ class surgeonEyeViewTest(ScriptedLoadableModuleTest):
     self.delayDisplay('Finished with download and loading')
 
     volumeNode = slicer.util.getNode(pattern="FA")
-    logic = surgeonEyeViewLogic()
+    logic = MIPonPlaneLogic()
     self.assertTrue( logic.hasImageData(volumeNode) )
     self.delayDisplay('Test passed!')

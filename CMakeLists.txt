@@ -1,6 +1,6 @@
 ﻿cmake_minimum_required(VERSION 2.8.9)
 
-project(Adquire_Data Data)
+project(slicer_modules_trials)
 
 #-----------------------------------------------------------------------------
 # Extension meta-information
@@ -23,6 +23,7 @@ add_subdirectory(CompareDistances)
 add_subdirectory(SaveFiducialList)
 add_subdirectory(vtkModel)
 add_subdirectory(surgeonEyeView)
+add_subdirectory(MIPonPlane)
 ## NEXT_MODULE
 
 #-----------------------------------------------------------------------------
