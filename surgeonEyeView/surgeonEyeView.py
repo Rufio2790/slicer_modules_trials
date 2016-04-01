@@ -114,12 +114,47 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
       Fiducials.GetNthFiducialPosition(x,FidCoords)
       F[x] = FidCoords
 
-    x= numpy.power(F[0,0]-F[1,0],2)
-    y= numpy.power(F[0,1]-F[1,1],2)
-    z= numpy.power(F[0,2]-F[1,2],2)
-    distance=numpy.sqrt((x+y+z))
-    print distance #stampo la distanza per controllare tramite console di slicer il risultato...
-    #Bisogna visualizzare il risultato nel modulo
+    #calcolo equazione parametrica retta passante per i due punti
+    t = numpy.linspace(-10,10,50) #vettore che rappresenta il dominio della retta
+    x = F[0,0] + (F[1,0]-F[0,0])*t
+    y = F[0,1] + (F[1,1]-F[0,1])*t
+    z = F[0,2] + (F[1,2]-F[0,2])*t
+    #calcolo coordinate punto medio per usarlo come origine del sistema di riferimento
+    xm = (F[0,0] + F[1,0]) / 2
+    ym = (F[0,1] + F[1,1]) / 2
+    zm = (F[0,2] + F[1,2]) / 2
+    PM = [xm,ym,zm]
+    PM = numpy.asarray(PM)
+    P0 = F[0]
+    P1 = F[1]
+    # Calcolo i 3 assi con Origine del sistema PM (punto medio)
+    A1 = P0 - PM #asse 1
+    A1 = A1 / numpy.linalg.norm(A1)
+    A3 = numpy.cross(A1, P1 - PM) #asse 3
+    A3 = A3 / numpy.linalg.norm(A3)
+    A2 = numpy.cross(A3, A1) #asse 2
+    # I 3 punti nel nuovo sistema di riferimento
+    P = PM
+    AT = [numpy.dot((P - PM), A1), numpy.dot((P - PM), A2), numpy.dot((P - PM), A3)] # prodotto scalare tra P-PM e A1
+    P = P0
+    BT = [numpy.dot(P - PM, A1), numpy.dot(P - PM, A2), numpy.dot(P - PM, A3)]
+    P = P1
+    CT = [numpy.dot(P - PM, A1), numpy.dot(P - PM, A2), numpy.dot(P - PM, A3)]
+    print P0
+    print P1
+    print PM
+    print AT
+    print BT
+    print CT
     logging.info('Processing completed')
 
     return True
+
+
+
+    #calcolo della distanza
+    #x= numpy.power(F[0,0]-F[1,0],2)
+    #y= numpy.power(F[0,1]-F[1,1],2)
+    #z= numpy.power(F[0,2]-F[1,2],2)
+    #distance=numpy.sqrt((x+y+z))
+    #print distance #stampo la distanza per controllare tramite console di slicer il risultato...
