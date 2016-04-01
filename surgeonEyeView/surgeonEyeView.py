@@ -67,6 +67,11 @@ class surgeonEyeViewWidget(ScriptedLoadableModuleWidget):
     parametersFormLayout.addRow("Fiducials: ", self.Fiducials)
 
     #
+    # Inserire Tasto Compute Distance che restituisce a schermo la distanza
+    # Questo dovrà essere collegato alla funzione ComputeDistance
+    #......
+
+    #
     # Apply Button
     #
     self.applyButton = qt.QPushButton("Apply")
@@ -100,42 +105,45 @@ class surgeonEyeViewWidget(ScriptedLoadableModuleWidget):
 class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
 
 
+  def ComputeDistance(self, Fiducials):
 
-  def run(self, Fiducials):
-    """
-    Run the actual algorithm
-    """
-
-    logging.info('Processing started')
-    F = numpy.zeros((2,3))
+    F = numpy.zeros((2, 3))
     FidCoords = numpy.empty(3)
     fiducialCount = Fiducials.GetNumberOfFiducials()
-    for x in range (fiducialCount):
-      Fiducials.GetNthFiducialPosition(x,FidCoords)
+    for x in range(fiducialCount):
+      Fiducials.GetNthFiducialPosition(x, FidCoords)
       F[x] = FidCoords
 
-    #calcolo equazione parametrica retta passante per i due punti
-    t = numpy.linspace(-10,10,50) #vettore che rappresenta il dominio della retta
-    x = F[0,0] + (F[1,0]-F[0,0])*t
-    y = F[0,1] + (F[1,1]-F[0,1])*t
-    z = F[0,2] + (F[1,2]-F[0,2])*t
-    #calcolo coordinate punto medio per usarlo come origine del sistema di riferimento
-    xm = (F[0,0] + F[1,0]) / 2
-    ym = (F[0,1] + F[1,1]) / 2
-    zm = (F[0,2] + F[1,2]) / 2
-    PM = [xm,ym,zm]
+    x = numpy.power(F[0,0] - F[1,0], 2)
+    y = numpy.power(F[0,1] - F[1,1], 2)
+    z = numpy.power(F[0,2] - F[1,2], 2)
+    distance=numpy.sqrt((x+y+z))
+    #inserire distance nel label della GUI
+
+  def ReferenceSystem(self, F): #Passare a questa funzione F che sono le coordinate già pronte calcolate prima
+
+    # calcolo equazione parametrica retta passante per i due punti (non serve, da cancellare)
+    t = numpy.linspace(-10, 10, 50)  # vettore che rappresenta il dominio della retta
+    x = F[0, 0] + (F[1, 0] - F[0, 0]) * t
+    y = F[0, 1] + (F[1, 1] - F[0, 1]) * t
+    z = F[0, 2] + (F[1, 2] - F[0, 2]) * t
+    # calcolo coordinate punto medio per usarlo come origine del sistema di riferimento
+    xm = (F[0, 0] + F[1, 0]) / 2
+    ym = (F[0, 1] + F[1, 1]) / 2
+    zm = (F[0, 2] + F[1, 2]) / 2
+    PM = [xm, ym, zm]
     PM = numpy.asarray(PM)
     P0 = F[0]
     P1 = F[1]
     # Calcolo i 3 assi con Origine del sistema in P0
-    A1 = PM - P0 #asse 1
+    A1 = PM - P0  # asse 1
     A1 = A1 / numpy.linalg.norm(A1)
-    A3 = numpy.cross(A1, P1 - P0) #asse 3
+    A3 = numpy.cross(A1, P1 - P0)  # asse 3
     A3 = A3 / numpy.linalg.norm(A3)
-    A2 = numpy.cross(A3, A1) #asse 2
-    #Creo la Matrice
-    MT = numpy.zeros((3,4))
-    for i in range(0,3):
+    A2 = numpy.cross(A3, A1)  # asse 2
+    # Creo la Matrice
+    MT = numpy.zeros((3, 4))
+    for i in range(0, 3):
       MT[0, i] = A1[i]
       MT[1, i] = A2[i]
       MT[2, i] = A3[i]
@@ -143,7 +151,7 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
 
     # I 3 punti nel nuovo sistema di riferimento
     P = P0
-    AT = [numpy.dot(P - P0, A1), numpy.dot(P - P0, A2), numpy.dot(P - P0, A3)] # prodotto scalare tra P-P0 e A1
+    AT = [numpy.dot(P - P0, A1), numpy.dot(P - P0, A2), numpy.dot(P - P0, A3)]  # prodotto scalare tra P-P0 e A1
     P = PM
     BT = [numpy.dot(P - P0, A1), numpy.dot(P - P0, A2), numpy.dot(P - P0, A3)]
     P = P1
@@ -158,15 +166,16 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
     print BT
     print CT
     print MT
+
+  def run(self): #Passare a questa funzione F (che sono le coordinate già pronte calcolate prima) e non Fiducials
+    """
+    Run the actual algorithm
+    """
+
+    logging.info('Processing started')
+
+    #In questa parte avevo pensato di inserire il terzo punto mancante del modulo
+
     logging.info('Processing completed')
 
     return True
-
-
-
-    #calcolo della distanza
-    #x= numpy.power(F[0,0]-F[1,0],2)
-    #y= numpy.power(F[0,1]-F[1,1],2)
-    #z= numpy.power(F[0,2]-F[1,2],2)
-    #distance=numpy.sqrt((x+y+z))
-    #print distance #stampo la distanza per controllare tramite console di slicer il risultato...
