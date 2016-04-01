@@ -127,25 +127,37 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
     PM = numpy.asarray(PM)
     P0 = F[0]
     P1 = F[1]
-    # Calcolo i 3 assi con Origine del sistema PM (punto medio)
-    A1 = P0 - PM #asse 1
+    # Calcolo i 3 assi con Origine del sistema in P0
+    A1 = PM - P0 #asse 1
     A1 = A1 / numpy.linalg.norm(A1)
-    A3 = numpy.cross(A1, P1 - PM) #asse 3
+    A3 = numpy.cross(A1, P1 - P0) #asse 3
     A3 = A3 / numpy.linalg.norm(A3)
     A2 = numpy.cross(A3, A1) #asse 2
+    #Creo la Matrice
+    MT = numpy.zeros((3,4))
+    for i in range(0,3):
+      MT[0, i] = A1[i]
+      MT[1, i] = A2[i]
+      MT[2, i] = A3[i]
+      MT[i, 3] = P0[i]
+
     # I 3 punti nel nuovo sistema di riferimento
-    P = PM
-    AT = [numpy.dot((P - PM), A1), numpy.dot((P - PM), A2), numpy.dot((P - PM), A3)] # prodotto scalare tra P-PM e A1
     P = P0
-    BT = [numpy.dot(P - PM, A1), numpy.dot(P - PM, A2), numpy.dot(P - PM, A3)]
+    AT = [numpy.dot(P - P0, A1), numpy.dot(P - P0, A2), numpy.dot(P - P0, A3)] # prodotto scalare tra P-P0 e A1
+    P = PM
+    BT = [numpy.dot(P - P0, A1), numpy.dot(P - P0, A2), numpy.dot(P - P0, A3)]
     P = P1
-    CT = [numpy.dot(P - PM, A1), numpy.dot(P - PM, A2), numpy.dot(P - PM, A3)]
+    CT = [numpy.dot(P - P0, A1), numpy.dot(P - P0, A2), numpy.dot(P - P0, A3)]
+    print A1
+    print A2
+    print A3
     print P0
     print P1
     print PM
     print AT
     print BT
     print CT
+    print MT
     logging.info('Processing completed')
 
     return True
