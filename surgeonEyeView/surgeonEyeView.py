@@ -69,10 +69,10 @@ class surgeonEyeViewWidget(ScriptedLoadableModuleWidget):
     #
     # Compute Distance Button
     #
-    self.distanceButton = qt.QPushButton("Compute Distance")
-    self.distanceButton.toolTip = "Compute Distance between F1 and F2"
-    self.distanceButton.enabled = True
-    parametersFormLayout.addRow(self.distanceButton)
+    # self.distanceButton = qt.QPushButton("Compute Distance")
+    # self.distanceButton.toolTip = "Compute Distance between F1 and F2"
+    # self.distanceButton.enabled = True
+    # parametersFormLayout.addRow(self.distanceButton)
 
 
     #
@@ -80,16 +80,16 @@ class surgeonEyeViewWidget(ScriptedLoadableModuleWidget):
     #
     self.applyButton = qt.QPushButton("Apply")
     self.applyButton.toolTip = "Run the algorithm."
-    self.applyButton.enabled = True
+    self.applyButton.enabled = False
     parametersFormLayout.addRow(self.applyButton)
 
     # Results
-    self.distance = qt.QLabel()
-    parametersFormLayout.addRow("Distance between F1 and F2 ", self.distance)
+    self.distanceValue = qt.QLabel()
+    parametersFormLayout.addRow("Distance between F1 and F2 ", self.distanceValue)
 
     # connections
     self.applyButton.connect('clicked(bool)', self.onApplyButton)
-
+    # self.distanceButton.connect('clicked(bool)', self.ondistanceButton)
     # Add vertical spacer
     self.layout.addStretch(1)
 
@@ -101,17 +101,21 @@ class surgeonEyeViewWidget(ScriptedLoadableModuleWidget):
 
   def onSelect(self):
     self.applyButton.enabled = self.Fiducials.currentNode()
+    # self.distanceButton.enabled = self.Fiducials.currentNode()
 
   def onApplyButton(self):
-    logic = surgeonEyeViewLogic()
-    logic.run(self.Fiducials.currentNode())
-    self.distance.setText('%.4f' % self.logic.info['Distance'])
+    self.logic = surgeonEyeViewLogic()
+    self.logic.run(self.Fiducials.currentNode())
+    self.distanceValue.setText('%.3f'%self.logic.distance)
+
+  # def ondistanceButton(self):
+  #   logic = surgeonEyeViewLogic()
+  #   logic.distance(self.Fiducials.currentNode())
 #
 # surgeonEyeViewLogic
 #
 
 class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
-
 
 
   def run(self, Fiducials):
@@ -120,13 +124,17 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
     """
 
     logging.info('Processing started')
-    F = numpy.zeros((2,3))
+
+    F = numpy.zeros((2, 3))
     FidCoords = numpy.empty(3)
     fiducialCount = Fiducials.GetNumberOfFiducials()
-    for x in range (fiducialCount):
-      Fiducials.GetNthFiducialPosition(x,FidCoords)
+    for x in range(fiducialCount):
+      Fiducials.GetNthFiducialPosition(x, FidCoords)
       F[x] = FidCoords
-
+    x = numpy.power(F[0, 0] - F[1, 0], 2)
+    y = numpy.power(F[0, 1] - F[1, 1], 2)
+    z = numpy.power(F[0, 2] - F[1, 2], 2)
+    self.distance = numpy.sqrt((x + y + z))
     #calcolo equazione parametrica retta passante per i due punti
     t = numpy.linspace(-10,10,50) #vettore che rappresenta il dominio della retta
     x = F[0,0] + (F[1,0]-F[0,0])*t
@@ -148,12 +156,12 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
     A2 = numpy.cross(A3, A1) #asse 2
     #Creo la Matrice
     MRT = numpy.zeros((4, 4))
-    MRT[0, :0] = A1
-    MRT[1, :1] = A2
-    MRT[2, :2] = A3
+    MRT[0, :3] = A1
+    MRT[1, :3] = A2
+    MRT[2, :3] = A3
     MRT[3, :3] = 0
     MRT[:3, 3] = P0
-    MRT[4, 4] = 1
+    MRT[3, 3] = 1
     # Ho provato anche a mettere gli assi in colonna anziche' in riga
     # MRT[:3, 0] = A1
     # MRT[:3, 1] = A2
@@ -181,12 +189,3 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
     logging.info('Processing completed')
 
     return True
-
-
-
-    #calcolo della distanza
-    #x= numpy.power(F[0,0]-F[1,0],2)
-    #y= numpy.power(F[0,1]-F[1,1],2)
-    #z= numpy.power(F[0,2]-F[1,2],2)
-    #distance=numpy.sqrt((x+y+z))
-    self.info['Distance'] = distance
