@@ -67,11 +67,6 @@ class surgeonEyeViewWidget(ScriptedLoadableModuleWidget):
     parametersFormLayout.addRow("Fiducials: ", self.Fiducials)
 
     #
-    # Inserire Tasto Compute Distance che restituisce a schermo la distanza
-    # Questo dovrà essere collegato alla funzione ComputeDistance
-    #......
-
-    #
     # Apply Button
     #
     self.applyButton = qt.QPushButton("Apply")
@@ -105,73 +100,80 @@ class surgeonEyeViewWidget(ScriptedLoadableModuleWidget):
 class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
 
 
-  def ComputeDistance(self, Fiducials):
 
-    F = numpy.zeros((2, 3))
-    FidCoords = numpy.empty(3)
-    fiducialCount = Fiducials.GetNumberOfFiducials()
-    for x in range(fiducialCount):
-      Fiducials.GetNthFiducialPosition(x, FidCoords)
-      F[x] = FidCoords
-
-    x = numpy.power(F[0,0] - F[1,0], 2)
-    y = numpy.power(F[0,1] - F[1,1], 2)
-    z = numpy.power(F[0,2] - F[1,2], 2)
-    distance=numpy.sqrt((x+y+z))
-    #inserire distance nel label della GUI
-
-  def ReferenceSystem(self, F): #Passare a questa funzione F che sono le coordinate già pronte calcolate prima
-
-    # calcolo equazione parametrica retta passante per i due punti (non serve, da cancellare)
-    t = numpy.linspace(-10, 10, 50)  # vettore che rappresenta il dominio della retta
-    x = F[0, 0] + (F[1, 0] - F[0, 0]) * t
-    y = F[0, 1] + (F[1, 1] - F[0, 1]) * t
-    z = F[0, 2] + (F[1, 2] - F[0, 2]) * t
-
-    P0 = F[0]
-    P1 = F[1]
-
-    # Nuova Matrice
-    # Traslazione su P0
-    MT = numpy.identity(4)
-    MT[:3, 3] = P0[:]
-    # Rotazione sui 3 assi
-    caxy = (P1[1]-P0[1]) / (P1[0]-P0[0]) #coeff angolare sul piano xy
-    caxz = (P1[2]-P0[2]) / (P1[0]-P0[0]) #coeff angolare sul piano xz
-    cayz = (P1[2]-P0[2]) / (P1[1]-P0[1]) #coeff angolare sul piano yz
-    senxy = numpy.sin(caxy)
-    cosxy = numpy.cos(caxy)
-    senxz = numpy.sin(caxz)
-    cosxz = numpy.cos(caxz)
-    senyz = numpy.sin(cayz)
-    cosyz = numpy.cos(cayz)
-    Ry = numpy.array([[1, 0, 0, 0],
-                      [0, cosyz, -senyz, 0],
-                      [0, senyz, cosyz, 0],
-                       0, 0, 0, 1])
-
-    Rx = numpy.array([[cosxy, 0, senxy, 0],
-                      [0, 1, 0, 0],
-                      [-senxy, 0, cosxy, 0],
-                      0, 0, 0, 1])
-    Rz = numpy.array([[cosxz, -senxz, 0, 0],
-                      [senxz, cosxy, 0, 0],
-                      [0, 0, 1, 0],
-                      0, 0, 0, 1])
-    MR = Rx * Ry * Rz
-    M = MR * MT # Matrice Finale
-
-
-
-  def run(self): #Passare a questa funzione F (che sono le coordinate già pronte calcolate prima) e non Fiducials
+  def run(self, Fiducials):
     """
     Run the actual algorithm
     """
 
     logging.info('Processing started')
+    F = numpy.zeros((2,3))
+    FidCoords = numpy.empty(3)
+    fiducialCount = Fiducials.GetNumberOfFiducials()
+    for x in range (fiducialCount):
+      Fiducials.GetNthFiducialPosition(x,FidCoords)
+      F[x] = FidCoords
 
-    #In questa parte avevo pensato di inserire il terzo punto mancante del modulo
+    #calcolo equazione parametrica retta passante per i due punti
+    t = numpy.linspace(-10,10,50) #vettore che rappresenta il dominio della retta
+    x = F[0,0] + (F[1,0]-F[0,0])*t
+    y = F[0,1] + (F[1,1]-F[0,1])*t
+    z = F[0,2] + (F[1,2]-F[0,2])*t
+    #calcolo coordinate punto medio per usarlo come origine del sistema di riferimento
+    xm = (F[0,0] + F[1,0]) / 2
+    ym = (F[0,1] + F[1,1]) / 2
+    zm = (F[0,2] + F[1,2]) / 2
+    PM = [xm,ym,zm]
+    PM = numpy.asarray(PM)
+    P0 = F[0]
+    P1 = F[1]
+    # Calcolo i 3 assi con Origine del sistema in P0
+    A1 = PM - P0 #asse 1
+    A1 = A1 / numpy.linalg.norm(A1)
+    A3 = numpy.cross(A1, P1 - P0) #asse 3
+    A3 = A3 / numpy.linalg.norm(A3)
+    A2 = numpy.cross(A3, A1) #asse 2
+    #Creo la Matrice
+    MRT = numpy.zeros((4, 4))
+    MRT[0, :0] = A1
+    MRT[1, :1] = A2
+    MRT[2, :2] = A3
+    MRT[3, :3] = 0
+    MRT[:3, 3] = P0
+    MRT[4, 4] = 1
+    # Ho provato anche a mettere gli assi in colonna anzichè in riga
+    # MRT[:3, 0] = A1
+    # MRT[:3, 1] = A2
+    # MRT[:3, 2] = A3
+    # MRT[:3, 3] = P0
+    # MRT[3, :3] = 0
+    # MRT[3, 3] = 1
+    
+    #test punto
+    PT = numpy.ones(4)
+    PT[:3] = P0
+    PT = PT.reshape(4,1)
+    e = numpy.dot(MRT, PT)
+    print A1
+    print A2
+    print A3
+    print P0
+    print P1
+    print PM
+    print MRT
+    print PT
+    print e
+
 
     logging.info('Processing completed')
 
     return True
+
+
+
+    #calcolo della distanza
+    #x= numpy.power(F[0,0]-F[1,0],2)
+    #y= numpy.power(F[0,1]-F[1,1],2)
+    #z= numpy.power(F[0,2]-F[1,2],2)
+    #distance=numpy.sqrt((x+y+z))
+    #print distance #stampo la distanza per controllare tramite console di slicer il risultato...
