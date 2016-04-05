@@ -67,12 +67,25 @@ class surgeonEyeViewWidget(ScriptedLoadableModuleWidget):
     parametersFormLayout.addRow("Fiducials: ", self.Fiducials)
 
     #
+    # Compute Distance Button
+    #
+    self.distanceButton = qt.QPushButton("Compute Distance")
+    self.distanceButton.toolTip = "Compute Distance between F1 and F2"
+    self.distanceButton.enabled = True
+    parametersFormLayout.addRow(self.distanceButton)
+
+
+    #
     # Apply Button
     #
     self.applyButton = qt.QPushButton("Apply")
     self.applyButton.toolTip = "Run the algorithm."
     self.applyButton.enabled = True
     parametersFormLayout.addRow(self.applyButton)
+
+    # Results
+    self.distance = qt.QLabel()
+    parametersFormLayout.addRow("Distance between F1 and F2 ", self.distance)
 
     # connections
     self.applyButton.connect('clicked(bool)', self.onApplyButton)
@@ -92,7 +105,7 @@ class surgeonEyeViewWidget(ScriptedLoadableModuleWidget):
   def onApplyButton(self):
     logic = surgeonEyeViewLogic()
     logic.run(self.Fiducials.currentNode())
-
+    self.distance.setText('%.4f' % self.logic.info['Distance'])
 #
 # surgeonEyeViewLogic
 #
@@ -141,14 +154,14 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
     MRT[3, :3] = 0
     MRT[:3, 3] = P0
     MRT[4, 4] = 1
-    # Ho provato anche a mettere gli assi in colonna anzichè in riga
+    # Ho provato anche a mettere gli assi in colonna anziche' in riga
     # MRT[:3, 0] = A1
     # MRT[:3, 1] = A2
     # MRT[:3, 2] = A3
     # MRT[:3, 3] = P0
     # MRT[3, :3] = 0
     # MRT[3, 3] = 1
-    
+
     #test punto
     PT = numpy.ones(4)
     PT[:3] = P0
@@ -176,4 +189,4 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
     #y= numpy.power(F[0,1]-F[1,1],2)
     #z= numpy.power(F[0,2]-F[1,2],2)
     #distance=numpy.sqrt((x+y+z))
-    #print distance #stampo la distanza per controllare tramite console di slicer il risultato...
+    self.info['Distance'] = distance
