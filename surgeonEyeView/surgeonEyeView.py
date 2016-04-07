@@ -149,42 +149,40 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
     P0 = F[0]
     P1 = F[1]
     # Calcolo i 3 assi con Origine del sistema in P0
-    A1 = PM - P0 #asse 1
-    A1 = A1 / numpy.linalg.norm(A1)
-    A3 = numpy.cross(A1, P1 - P0) #asse 3
-    A3 = A3 / numpy.linalg.norm(A3)
-    A2 = numpy.cross(A3, A1) #asse 2
+    Az = PM - P0 #asse 1
+    Az = Az / numpy.linalg.norm(Az)
+    Ax = numpy.cross(Az, P1 - P0) #asse 3
+    Ax = Ax / numpy.linalg.norm(Ax)
+    Ay = numpy.cross(Ax, Az) #asse 2
     #Creo la Matrice
     MRT = numpy.zeros((4, 4))
-    MRT[0, :3] = A1
-    MRT[1, :3] = A2
-    MRT[2, :3] = A3
-    MRT[3, :3] = 0
-    MRT[:3, 3] = P0
-    MRT[3, 3] = 1
-    # Ho provato anche a mettere gli assi in colonna anziche' in riga
-    # MRT[:3, 0] = A1
-    # MRT[:3, 1] = A2
-    # MRT[:3, 2] = A3
-    # MRT[:3, 3] = P0
+    # MRT[0, :3] = A1
+    # MRT[1, :3] = A2
+    # MRT[2, :3] = A3
     # MRT[3, :3] = 0
+    # MRT[:3, 3] = P0
     # MRT[3, 3] = 1
+    MRT[:3, 0] = Az
+    MRT[:3, 1] = Ay
+    MRT[:3, 2] = Ax
+    MRT[:3, 3] = P0
+    MRT[3, :3] = 0
+    MRT[3, 3] = 1
 
+    #Calcolo l'inversa di MRT
+    IMRT = numpy.transpose(MRT [0:3, 0:3])
+    P00 = P0.reshape(3,1)
+    NewCenter = numpy.dot(IMRT, P00)
     #test punto
-    PT = numpy.ones(4)
-    PT[:3] = P0
-    PT = PT.reshape(4,1)
-    e = numpy.dot(MRT, PT)
-    print A1
-    print A2
-    print A3
+
+    print Az
+    print Ay
+    print Ax
     print P0
     print P1
     print PM
     print MRT
-    print PT
-    print e
-
+    print NewCenter
 
     logging.info('Processing completed')
 
