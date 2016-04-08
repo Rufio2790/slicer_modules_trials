@@ -18,7 +18,7 @@ class surgeonEyeView(ScriptedLoadableModule):
     self.parent.title = "surgeonEyeView" # TODO make this more human readable by adding spaces
     self.parent.categories = ["Segmentation"]
     self.parent.dependencies = []
-    self.parent.contributors = ["Giuseppe De Luca (POLIMI)"] # replace with "Firstname Lastname (Organization)"
+    self.parent.contributors = ["Giuseppe De Luca (POLIMI)"]
     self.parent.helpText = """
     This module will be used to verify the correctness of the trajectories implemented. .
     """
@@ -89,7 +89,7 @@ class surgeonEyeViewWidget(ScriptedLoadableModuleWidget):
 
     # connections
     self.applyButton.connect('clicked(bool)', self.onApplyButton)
-    # self.distanceButton.connect('clicked(bool)', self.ondistanceButton)
+    #self.distanceButton.connect('clicked(bool)', self.ondistanceButton)
     # Add vertical spacer
     self.layout.addStretch(1)
 
@@ -101,16 +101,20 @@ class surgeonEyeViewWidget(ScriptedLoadableModuleWidget):
 
   def onSelect(self):
     self.applyButton.enabled = self.Fiducials.currentNode()
-    # self.distanceButton.enabled = self.Fiducials.currentNode()
+    #self.distanceButton.enabled = self.Fiducials.currentNode()
 
   def onApplyButton(self):
     self.logic = surgeonEyeViewLogic()
-    self.logic.run(self.Fiducials.currentNode())
-    self.distanceValue.setText('%.3f'%self.logic.distance)
+    self.logic.CalcDistance(self.Fiducials.currentNode())
+    self.logic.run() #L'errore e' qui in quanto non so come passare F calcolati con CalcDistance alla funzione run
+    self.distanceValue.setText('%.3f' % self.logic.distance)
 
-  # def ondistanceButton(self):
-  #   logic = surgeonEyeViewLogic()
-  #   logic.distance(self.Fiducials.currentNode())
+  #def ondistanceButton(self):
+  #logic2 = surgeonEyeViewLogic()
+  #logic2.CalcDistance(self.Fiducials.currentNode())
+
+
+
 #
 # surgeonEyeViewLogic
 #
@@ -118,16 +122,19 @@ class surgeonEyeViewWidget(ScriptedLoadableModuleWidget):
 class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
 
 
-  def run(self, Fiducials):
-    """
-    Run the actual algorithm
-    """
 
-    logging.info('Processing started')
+
+
+  def CalcDistance(self, Fiducials):
 
     F = numpy.zeros((2, 3))
     FidCoords = numpy.empty(3)
     fiducialCount = Fiducials.GetNumberOfFiducials()
+    if fiducialCount == 0:
+      print 'No points found'
+    elif fiducialCount == 1:
+      print 'There is only one point'
+
     for x in range(fiducialCount):
       Fiducials.GetNthFiducialPosition(x, FidCoords)
       F[x] = FidCoords
@@ -135,54 +142,87 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
     y = numpy.power(F[0, 1] - F[1, 1], 2)
     z = numpy.power(F[0, 2] - F[1, 2], 2)
     self.distance = numpy.sqrt((x + y + z))
-    #calcolo equazione parametrica retta passante per i due punti
-    t = numpy.linspace(-10,10,50) #vettore che rappresenta il dominio della retta
-    x = F[0,0] + (F[1,0]-F[0,0])*t
-    y = F[0,1] + (F[1,1]-F[0,1])*t
-    z = F[0,2] + (F[1,2]-F[0,2])*t
-    #calcolo coordinate punto medio per usarlo come origine del sistema di riferimento
-    xm = (F[0,0] + F[1,0]) / 2
-    ym = (F[0,1] + F[1,1]) / 2
-    zm = (F[0,2] + F[1,2]) / 2
-    PM = [xm,ym,zm]
-    PM = numpy.asarray(PM)
+    print self.distance  #qua il codice arriva!!!
+
+    return F
+
+
+  def run(self, F ):
+    """
+    Run the actual algorithm
+    """
+
+    logging.info('Processing started')
+
+
     P0 = F[0]
     P1 = F[1]
+    P2 = numpy.random.uniform(-60,70 , 3)
     # Calcolo i 3 assi con Origine del sistema in P0
-    Az = PM - P0 #asse 1
+    Az = P1 - P0 #asse 1
     Az = Az / numpy.linalg.norm(Az)
-    Ax = numpy.cross(Az, P1 - P0) #asse 3
+    Ax = numpy.cross(Az, P2 - P0) #asse 3
     Ax = Ax / numpy.linalg.norm(Ax)
     Ay = numpy.cross(Ax, Az) #asse 2
     #Creo la Matrice
     MRT = numpy.zeros((4, 4))
-    # MRT[0, :3] = A1
-    # MRT[1, :3] = A2
-    # MRT[2, :3] = A3
-    # MRT[3, :3] = 0
-    # MRT[:3, 3] = P0
-    # MRT[3, 3] = 1
-    MRT[:3, 0] = Az
-    MRT[:3, 1] = Ay
-    MRT[:3, 2] = Ax
-    MRT[:3, 3] = P0
+    MRT[0, :3] = Az
+    MRT[1, :3] = Ay
+    MRT[2, :3] = Ax
     MRT[3, :3] = 0
+    MRT[:3, 3] = P0
     MRT[3, 3] = 1
+    det = numpy.linalg.det(MRT) #E' uguale a 1!!!
+    print det
+    # MRT[:3, 0] = Az
+    # MRT[:3, 1] = Ay
+    # MRT[:3, 2] = Ax
+    # MRT[:3, 3] = P0
+    # MRT[3, :3] = 0
+    # MRT[3, 3] = 1
 
-    #Calcolo l'inversa di MRT
-    IMRT = numpy.transpose(MRT [0:3, 0:3])
-    P00 = P0.reshape(3,1)
-    NewCenter = numpy.dot(IMRT, P00)
-    #test punto
 
     print Az
     print Ay
     print Ax
     print P0
     print P1
-    print PM
+    print P2
     print MRT
-    print NewCenter
+
+
+    #Abbozzo l'ultimo punto (Sicuramente sbagliato....)
+
+
+
+    camera = vtk.vtkCamera()
+    cameraPositionMultiplier = 5
+    sliceNodes = slicer.mrmlScene.GetNodesByClass('vtkMRMLSliceNode')
+    axialSliceNode = sliceNodes.GetItemAsObject(0)
+    m = axialSliceNode.GetSliceToRAS()
+    rSliceToRAS = numpy.matrix([[m.GetElement(0, 0), m.GetElement(0, 1), m.GetElement(0, 2)],
+                          [m.GetElement(1, 0), m.GetElement(1, 1), m.GetElement(1, 2)],
+                          [m.GetElement(2, 0), m.GetElement(2, 1), m.GetElement(2, 2)]])
+
+    det = numpy.linalg.det(rSliceToRAS)
+    if det > 0:  # right hand
+      y = numpy.array([0, 0, -cameraPositionMultiplier])
+    elif det < 0:  # left hand
+      y = numpy.array([0, 0, cameraPositionMultiplier])
+
+    x = numpy.matrix([[m.GetElement(0, 0), m.GetElement(0, 1), m.GetElement(0, 2)],
+                   [m.GetElement(1, 0), m.GetElement(1, 1), m.GetElement(1, 2)],
+                   [m.GetElement(2, 0), m.GetElement(2, 1), m.GetElement(2, 2)]])
+
+    # Calculating position
+    position = numpy.inner(x, y)
+    camera.SetPosition(-position[0, 0], -position[0, 1], -position[0, 2])
+
+    print axialSliceNode
+    print m
+    print rSliceToRAS
+
+
 
     logging.info('Processing completed')
 
