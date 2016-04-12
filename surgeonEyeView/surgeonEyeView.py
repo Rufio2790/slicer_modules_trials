@@ -52,7 +52,6 @@ class surgeonEyeViewWidget(ScriptedLoadableModuleWidget):
     # Layout within the dummy collapsible button
     parametersFormLayout = qt.QFormLayout(parametersCollapsibleButton)
 
-
     #IMPORTANZA DEI NOMI: metti nomi che abbiano un significato, che siano capibili solo leggendoli! Rende molto piu'
     #facile, soprattutto quando il codice e' grande, capire cosa si sta facendo
     # fiducials
@@ -209,6 +208,7 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
     print "Determinant: ", det
 
     self.createNewLinearTransform(MRT)
+    return MRT
     #TODO Check why is not working correctly
     # if det == 1:
     #   logging.info('Processing completed')
@@ -223,21 +223,51 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
     linearTransformNode = slicer.vtkMRMLLinearTransformNode()
     transformMatrix = vtk.vtkMatrix4x4()
 
-    numpyMatrix = numpyMatrix.ravel()
-    numpyMatrix = numpyMatrix.squeeze()
-    print numpyMatrix
-    transformMatrix.DeepCopy([numpyMatrix[0], numpyMatrix[1], numpyMatrix[2], numpyMatrix[3],
-                             numpyMatrix[4], numpyMatrix[5], numpyMatrix[6], numpyMatrix[7],
-                             numpyMatrix[8], numpyMatrix[9], numpyMatrix[10], numpyMatrix[11],
-                             numpyMatrix[12], numpyMatrix[13], numpyMatrix[14], numpyMatrix[15]])
+    InvMat = numpy.transpose(numpyMatrix)
+    InvMat[:3, 3] = InvMat[3, :3]
+    # Se è il determinante è = -1 si introduce una riflessione che elimino invertendo il segno dell'intero asse Z
+    # della nuova matrice ottenendo det = 1
+    if numpy.linalg.det(numpyMatrix) < 0:
+      print "Reflection detected"
+      InvMat[:3, 2] = -numpyMatrix[2, :3]
+    InvMat[3, :3] = 0
+    InvMat[3, 3] = 1
+
+    print "Inverse Transformation Matrix:\n", InvMat
+    det2 = numpy.linalg.det(InvMat)
+    print "DeterminantInvMat: ", det2
+    InvMat = InvMat.ravel()
+    InvMat = InvMat.squeeze()
+    print InvMat
+    transformMatrix.DeepCopy([InvMat[0], InvMat[1], InvMat[2], InvMat[3],
+                              InvMat[4], InvMat[5], InvMat[6], InvMat[7],
+                              InvMat[8], InvMat[9], InvMat[10], InvMat[11],
+                              InvMat[12], InvMat[13], InvMat[14], InvMat[15]])
 
 
     slicer.mrmlScene.AddNode(linearTransformNode)
     linearTransformNode.SetAndObserveMatrixTransformToParent(transformMatrix)
     linearTransformNode.SetName('TransformToLCS')
-
+    #Qua i tentativi con la trasformazione dei punti
+    # F0 = numpy.ones(4)
+    # F1 = numpy.ones(4)
+    # F0[:3] = F[0]
+    # F0 = F0.reshape(4, 1)
+    # F1[:3] = F[1]
+    # F1 = F1.reshape(4, 1)
+    # F0 = IMRT.dot(F0)
+    # F1 = IMRT.dot(F1)
+    # print "F0:\n", F0
+    # print "F1:\n", F1
 
   def moveSliceToNewReferenceFrame(self):
+
+
+    #Recupero il nodo
+    sliceNodes = slicer.mrmlScene.GetNodesByClass('vtkMRMLSliceNode')
+    axialSliceNode = sliceNodes.GetItemAsObject(0)
+    axialSliceNode.SetSliceOffset(20)
+
 
 
     #Probabilmente la vtkCamera non ti serve, o meglio, non ti serve se lavoriamo sulle slice.
@@ -258,31 +288,61 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
 
 
 
-    camera = vtk.vtkCamera()
-    cameraPositionMultiplier = 5
-    sliceNodes = slicer.mrmlScene.GetNodesByClass('vtkMRMLSliceNode')
-    axialSliceNode = sliceNodes.GetItemAsObject(0)
-    m = axialSliceNode.GetSliceToRAS()
-    rSliceToRAS = numpy.matrix([[m.GetElement(0, 0), m.GetElement(0, 1), m.GetElement(0, 2)],
-                          [m.GetElement(1, 0), m.GetElement(1, 1), m.GetElement(1, 2)],
-                          [m.GetElement(2, 0), m.GetElement(2, 1), m.GetElement(2, 2)]])
+    # camera = vtk.vtkCamera()
+    # cameraPositionMultiplier = 5
+    #
+    #
+    # m = axialSliceNode.GetSliceToRAS()
+    # rSliceToRAS = numpy.matrix([[m.GetElement(0, 0), m.GetElement(0, 1), m.GetElement(0, 2)],
+    #                       [m.GetElement(1, 0), m.GetElement(1, 1), m.GetElement(1, 2)],
+    #                       [m.GetElement(2, 0), m.GetElement(2, 1), m.GetElement(2, 2)]])
+    #
+    # det = numpy.linalg.det(rSliceToRAS)
+    # if det > 0:  # right hand
+    #   y = numpy.array([0, 0, -cameraPositionMultiplier])
+    # elif det < 0:  # left hand
+    #   y = numpy.array([0, 0, cameraPositionMultiplier])
+    #
+    # x = numpy.matrix([[m.GetElement(0, 0), m.GetElement(0, 1), m.GetElement(0, 2)],
+    #                [m.GetElement(1, 0), m.GetElement(1, 1), m.GetElement(1, 2)],
+    #                [m.GetElement(2, 0), m.GetElement(2, 1), m.GetElement(2, 2)]])
+    #
+    # # Calculating position
+    # position = numpy.inner(x, y)
+    # camera.SetPosition(-position[0, 0], -position[0, 1], -position[0, 2])
+    #
+    # print axialSliceNode
+    # print m
+    # print rSliceToRAS
+    #
+    # return True
 
-    det = numpy.linalg.det(rSliceToRAS)
-    if det > 0:  # right hand
-      y = numpy.array([0, 0, -cameraPositionMultiplier])
-    elif det < 0:  # left hand
-      y = numpy.array([0, 0, cameraPositionMultiplier])
-
-    x = numpy.matrix([[m.GetElement(0, 0), m.GetElement(0, 1), m.GetElement(0, 2)],
-                   [m.GetElement(1, 0), m.GetElement(1, 1), m.GetElement(1, 2)],
-                   [m.GetElement(2, 0), m.GetElement(2, 1), m.GetElement(2, 2)]])
-
-    # Calculating position
-    position = numpy.inner(x, y)
-    camera.SetPosition(-position[0, 0], -position[0, 1], -position[0, 2])
-
-    print axialSliceNode
-    print m
-    print rSliceToRAS
-
-    return True
+# Widgets for setting translation/rotation part of a linear transform
+    # Position widget
+    #
+    # self.positionSliderWidget = slicer.qMRMLTransformSliders()
+    # self.positionSliderWidget.Title = 'Position'
+    # self.positionSliderWidget.TypeOfTransform = slicer.qMRMLTransformSliders.TRANSLATION
+    # self.positionSliderWidget.CoordinateReference = slicer.qMRMLTransformSliders.LOCAL
+    # self.positionSliderWidget.setMRMLScene(slicer.mrmlScene)
+    # self.positionSliderWidget.setMRMLScene(slicer.mrmlScene)
+    # self.positionSliderWidget.setMRMLTransformNode(self.getPivotToRasTransformNode())
+    # planesFormLayout.addRow("Translation", self.positionSliderWidget)
+    #
+    # # Orientation widget
+    #
+    # self.orientationSliderWidget = slicer.qMRMLTransformSliders()
+    # self.orientationSliderWidget.Title = 'Orientation'
+    # self.orientationSliderWidget.setMRMLScene(slicer.mrmlScene)
+    #
+    # # Setting of qMRMLTransformSliders.TypeOfTransform is not robust: it has to be set after setMRMLScene and
+    # # has to be set twice (with setting the type to something else in between).
+    # # Therefore the following 3 lines are needed, and they are needed here:
+    #
+    # self.orientationSliderWidget.TypeOfTransform = slicer.qMRMLTransformSliders.ROTATION
+    # self.orientationSliderWidget.TypeOfTransform = slicer.qMRMLTransformSliders.TRANSLATION
+    # self.orientationSliderWidget.TypeOfTransform = slicer.qMRMLTransformSliders.ROTATION
+    # self.orientationSliderWidget.CoordinateReference = slicer.qMRMLTransformSliders.LOCAL
+    # self.orientationSliderWidget.minMaxVisible = False
+    # self.orientationSliderWidget.setMRMLTransformNode(self.getPivotToRasTransformNode())
+    # planesFormLayout.addRow("Orientation", self.orientationSliderWidget)
