@@ -279,7 +279,7 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
     event = vtk.vtkIntArray()
     event.InsertNextValue(slicer.vtkMRMLTransformableNode.TransformModifiedEvent)
     inode.SetAndObserveNodeReferenceID('transform', 'vtkMRMLLinearTransformNode4', event)
-    axialSliceNode.SetSliceOrigin(transformMatrix.GetElement[0, 3], transformMatrix.GetElement[1, 3], transformMatrix.GetElement[2, 3])
+    #axialSliceNode.SetSliceOrigin(transformMatrix.GetElement[0, 3], transformMatrix.GetElement[1, 3], transformMatrix.GetElement[2, 3])
 
 
 
