@@ -67,10 +67,20 @@ class surgeonEyeViewWidget(ScriptedLoadableModuleWidget):
     self.FiducialsSelector.setToolTip( "Pick the fiducials." )
     parametersFormLayout.addRow("Fiducials: ", self.FiducialsSelector)
 
+    # Position Widget
+    self.positionWidget = ctk.ctkSliderWidget()
+    self.positionWidget.singleStep = 0.05 #da calcolare
+    self.positionWidget.minimum = -1 #da calcolare
+    self.positionWidget.maximum = 1 #da calcolare
+    self.positionWidget.value = 0.0
+    self.positionWidget.setToolTip("scroll slices through the new axis")
+    parametersFormLayout.addRow("Position", self.positionWidget)
+    self.positionWidget.connect('valueChanged(double)', self.onPositionWidget)
+
     # Compute Distance Button
     self.distanceButton = qt.QPushButton("Compute Distance")
     self.distanceButton.toolTip = "Compute Distance between F1 and F2"
-    self.distanceButton.enabled = True
+    self.distanceButton.enabled = False
     parametersFormLayout.addRow(self.distanceButton)
     #personalmente preferisco mettere la connection subito sotto l'elemento della GUI che e' collegato alla funzione
     self.distanceButton.connect('clicked(bool)', self.ondistanceButton)
@@ -97,6 +107,7 @@ class surgeonEyeViewWidget(ScriptedLoadableModuleWidget):
 
   def onSelect(self):
     self.applyButton.enabled = self.FiducialsSelector.currentNode()
+    self.distanceButton.enabled = self.FiducialsSelector.currentNode()
 
   def onApplyButton(self):
     pass
@@ -112,11 +123,16 @@ class surgeonEyeViewWidget(ScriptedLoadableModuleWidget):
     self.distanceValueLabel.setText(self.distanceValue)
     logic.run(self.F)
 
+
   def ondistanceButton(self):
 
     logic = surgeonEyeViewLogic()
     self.distanceValue, F = logic.calcDistance(self.FiducialsSelector.currentNode())
     self.distanceValueLabel.setText(self.distanceValue)
+
+  def onPositionWidget(self):
+    logic = surgeonEyeViewLogic()
+    # logic.moveSliceToNewReferenceFrame()
 
 
 #
@@ -147,7 +163,7 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
     #perché salvarla come membro dell'oggetto logic?? meglio fare un return della distance e al massimo salvarla come
     # membro della classe GUI
     distanceValue = numpy.sqrt((x + y + z))
-    print 'Distance Value between fiducials Computed: ',distanceValue  #qua il codice arriva!!!
+    print 'Distance Value between fiducials Computed: ',distanceValue
 
     if distanceValue < 0:
       slicer.util.delayDisplay("Error Computing Distance")
@@ -175,7 +191,7 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
     Ax = numpy.cross(Az, P2 - P0) #asse 3
     Ax = Ax / numpy.linalg.norm(Ax)
 
-    Ay = numpy.cross(Ax, Az) #asse 2
+    Ay = numpy.cross(Az, Ax) #asse 2
 
     #Creo la Matrice
     MRT = numpy.zeros((4, 4))
@@ -223,19 +239,21 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
     linearTransformNode = slicer.vtkMRMLLinearTransformNode()
     transformMatrix = vtk.vtkMatrix4x4()
 
-    InvMat = numpy.transpose(numpyMatrix)
-    InvMat[:3, 3] = InvMat[3, :3]
-    # Se è il determinante è = -1 si introduce una riflessione che elimino invertendo il segno dell'intero asse Z
-    # della nuova matrice ottenendo det = 1
-    if numpy.linalg.det(numpyMatrix) < 0:
-      print "Reflection detected"
-      InvMat[:3, 2] = -numpyMatrix[2, :3]
-    InvMat[3, :3] = 0
-    InvMat[3, 3] = 1
-
+    InvMat = numpy.linalg.inv(numpyMatrix)
     print "Inverse Transformation Matrix:\n", InvMat
     det2 = numpy.linalg.det(InvMat)
     print "DeterminantInvMat: ", det2
+
+    # F0 = numpy.ones(4)
+    # F1 = numpy.ones(4)
+    # F0[:3] = F[0]
+    # F0 = F0.reshape(4, 1)
+    # F1[:3] = F[1]
+    # F1 = F1.reshape(4, 1)
+    # F0 = InvMat.dot(F0)
+    # F1 = InvMat.dot(F1)
+    # print "F0:\n", F0
+    # print "F1:\n", F1
     InvMat = InvMat.ravel()
     InvMat = InvMat.squeeze()
     print InvMat
@@ -248,26 +266,27 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
     slicer.mrmlScene.AddNode(linearTransformNode)
     linearTransformNode.SetAndObserveMatrixTransformToParent(transformMatrix)
     linearTransformNode.SetName('TransformToLCS')
-    #Qua i tentativi con la trasformazione dei punti
-    # F0 = numpy.ones(4)
-    # F1 = numpy.ones(4)
-    # F0[:3] = F[0]
-    # F0 = F0.reshape(4, 1)
-    # F1[:3] = F[1]
-    # F1 = F1.reshape(4, 1)
-    # F0 = IMRT.dot(F0)
-    # F1 = IMRT.dot(F1)
-    # print "F0:\n", F0
-    # print "F1:\n", F1
+    self.moveSliceToNewReferenceFrame(transformMatrix)
 
-  def moveSliceToNewReferenceFrame(self):
+  def moveSliceToNewReferenceFrame(self, transformMatrix):
 
 
     #Recupero il nodo
     sliceNodes = slicer.mrmlScene.GetNodesByClass('vtkMRMLSliceNode')
     axialSliceNode = sliceNodes.GetItemAsObject(0)
-    axialSliceNode.SetSliceOffset(20)
+    scene = slicer.mrmlScene
+    inode = scene.GetNodeByID('vtkMRMLScalarVolumeNode1')
+    event = vtk.vtkIntArray()
+    event.InsertNextValue(slicer.vtkMRMLTransformableNode.TransformModifiedEvent)
+    inode.SetAndObserveNodeReferenceID('transform', 'vtkMRMLLinearTransformNode4', event)
+    axialSliceNode.SetSliceOrigin(transformMatrix.GetElement[0, 3], transformMatrix.GetElement[1, 3], transformMatrix.GetElement[2, 3])
 
+
+
+    #per il widget bisogna layoutManager
+    # m = slicer.app.layoutManager()
+    # rw = lm.sliceWidget('Red')
+    # sl = rw.sliceLogic()
 
 
     #Probabilmente la vtkCamera non ti serve, o meglio, non ti serve se lavoriamo sulle slice.
@@ -324,7 +343,6 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
     # self.positionSliderWidget.Title = 'Position'
     # self.positionSliderWidget.TypeOfTransform = slicer.qMRMLTransformSliders.TRANSLATION
     # self.positionSliderWidget.CoordinateReference = slicer.qMRMLTransformSliders.LOCAL
-    # self.positionSliderWidget.setMRMLScene(slicer.mrmlScene)
     # self.positionSliderWidget.setMRMLScene(slicer.mrmlScene)
     # self.positionSliderWidget.setMRMLTransformNode(self.getPivotToRasTransformNode())
     # planesFormLayout.addRow("Translation", self.positionSliderWidget)
