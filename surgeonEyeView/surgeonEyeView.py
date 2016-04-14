@@ -267,27 +267,33 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
     linearTransformNode.SetAndObserveMatrixTransformToParent(transformMatrix)
     linearTransformNode.SetName('TransformToLCS')
     self.moveSliceToNewReferenceFrame(transformMatrix)
+    return transformMatrix
+
 
   def moveSliceToNewReferenceFrame(self, transformMatrix):
 
 
     #Recupero il nodo
-    sliceNodes = slicer.mrmlScene.GetNodesByClass('vtkMRMLSliceNode')
-    axialSliceNode = sliceNodes.GetItemAsObject(0)
-    scene = slicer.mrmlScene
-    inode = scene.GetNodeByID('vtkMRMLScalarVolumeNode1')
-    event = vtk.vtkIntArray()
-    event.InsertNextValue(slicer.vtkMRMLTransformableNode.TransformModifiedEvent)
-    inode.SetAndObserveNodeReferenceID('transform', 'vtkMRMLLinearTransformNode4', event)
-    #axialSliceNode.SetSliceOrigin(transformMatrix.GetElement[0, 3], transformMatrix.GetElement[1, 3], transformMatrix.GetElement[2, 3])
+    redSlice = slicer.mrmlScene.GetNodeByID('vtkMRMLSliceNodeRed')
+    #rotazione
+
+    redSlice.SetSliceToRAS(transformMatrix)
+    redSlice.UpdateMatrices()
+    #ax.SetSliceOrigin(transformMatrix.GetElement[0, 3], transformMatrix.GetElement[1, 3], transformMatrix.GetElement[2, 3])
 
 
 
     #per il widget bisogna layoutManager
     # m = slicer.app.layoutManager()
-    # rw = lm.sliceWidget('Red')
+    # rw = m.sliceWidget('Red')
     # sl = rw.sliceLogic()
 
+    
+    # scene = slicer.mrmlScene
+    # inode = scene.GetNodeByID('vtkMRMLScalarVolumeNode1')
+    # event = vtk.vtkIntArray()
+    # event.InsertNextValue(slicer.vtkMRMLTransformableNode.TransformModifiedEvent)
+    # inode.SetAndObserveNodeReferenceID('transform', 'vtkMRMLLinearTransformNode4', event)
 
     #Probabilmente la vtkCamera non ti serve, o meglio, non ti serve se lavoriamo sulle slice.
     #Cerca di guardare la documentazione sul reformat, recupera il nodo della slice rossa dalla scena e modifica
