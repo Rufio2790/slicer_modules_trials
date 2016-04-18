@@ -110,7 +110,7 @@ class surgeonEyeViewWidget(ScriptedLoadableModuleWidget):
 
     logic = surgeonEyeViewLogic()
     self.distanceValue, F = logic.calcDistance(self.FiducialsSelector.currentNode())
-    self.distanceValueLabel.setText(self.distanceValue)
+    self.distanceValueLabel.setText('%.3f' % self.distanceValue + ' millimeters')
 
 
 
@@ -122,7 +122,6 @@ class surgeonEyeViewWidget(ScriptedLoadableModuleWidget):
 class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
 
 
-  #definisci le funzioni con una convenzione di nomi: una funzione la facciamo iniziare sempre con una lettera minuscola
   def calcDistance(self, Fiducials):
 
     F = numpy.zeros((2, 3))
@@ -140,8 +139,6 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
     y = numpy.power(F[0, 1] - F[1, 1], 2)
     z = numpy.power(F[0, 2] - F[1, 2], 2)
 
-    #perché salvarla come membro dell'oggetto logic?? meglio fare un return della distance e al massimo salvarla come
-    # membro della classe GUI
     distanceValue = numpy.sqrt((x + y + z))
     print 'Distance Value between fiducials Computed: ',distanceValue
 
@@ -161,6 +158,7 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
 
     P0 = F[0]
     P1 = F[1]
+    # New Support Point
     P2 = [P0[0]-20, P0[1]+10,P0[2]+30]
 
 
@@ -179,8 +177,6 @@ class surgeonEyeViewLogic(ScriptedLoadableModuleLogic):
     MRT[:3, 3] = P0
     MRT[3, :3] = 0
     MRT[3, 3] = 1
-
-
 
     det = numpy.linalg.det(MRT)
     print "Determinant: ", det
