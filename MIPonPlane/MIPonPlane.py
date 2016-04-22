@@ -1,6 +1,6 @@
 import os
 import unittest
-import vtk, qt, ctk, slicer
+import vtk, qt, ctk, slicer, numpy
 from slicer.ScriptedLoadableModule import *
 import logging
 
@@ -16,9 +16,9 @@ class MIPonPlane(ScriptedLoadableModule):
   def __init__(self, parent):
     ScriptedLoadableModule.__init__(self, parent)
     self.parent.title = "MIPonPlane" # TODO make this more human readable by adding spaces
-    self.parent.categories = ["TestModules"]
+    self.parent.categories = ["Segmentation"]
     self.parent.dependencies = []
-    self.parent.contributors = ["John Doe (AnyWare Corp.)"] # replace with "Firstname Lastname (Organization)"
+    self.parent.contributors = ["Giuseppe De Luca (POLIMI)"]
     self.parent.helpText = """
     This is an example of scripted loadable module bundled in an extension.
     It performs a simple thresholding on the input volume and optionally captures a screenshot.
@@ -52,54 +52,38 @@ class MIPonPlaneWidget(ScriptedLoadableModuleWidget):
     # Layout within the dummy collapsible button
     parametersFormLayout = qt.QFormLayout(parametersCollapsibleButton)
 
-    #
-    # input volume selector
-    #
-    self.inputSelector = slicer.qMRMLNodeComboBox()
-    self.inputSelector.nodeTypes = ["vtkMRMLScalarVolumeNode"]
-    self.inputSelector.selectNodeUponCreation = True
-    self.inputSelector.addEnabled = False
-    self.inputSelector.removeEnabled = False
-    self.inputSelector.noneEnabled = False
-    self.inputSelector.showHidden = False
-    self.inputSelector.showChildNodeTypes = False
-    self.inputSelector.setMRMLScene( slicer.mrmlScene )
-    self.inputSelector.setToolTip( "Pick the input to the algorithm." )
-    parametersFormLayout.addRow("Input Volume: ", self.inputSelector)
+    # fiducials
+    self.FiducialsSelector = slicer.qMRMLNodeComboBox()
+    self.FiducialsSelector.nodeTypes = (("vtkMRMLMarkupsFiducialNode"), "")
+    self.FiducialsSelector.selectNodeUponCreation = True
+    self.FiducialsSelector.addEnabled = False
+    self.FiducialsSelector.removeEnabled = False
+    self.FiducialsSelector.noneEnabled = False
+    self.FiducialsSelector.showHidden = False
+    self.FiducialsSelector.showChildNodeTypes = False
+    self.FiducialsSelector.setMRMLScene(slicer.mrmlScene)
+    self.FiducialsSelector.setToolTip("Pick the fiducials.")
+    parametersFormLayout.addRow("Fiducials: ", self.FiducialsSelector)
 
-    #
-    # output volume selector
-    #
-    self.outputSelector = slicer.qMRMLNodeComboBox()
-    self.outputSelector.nodeTypes = ["vtkMRMLScalarVolumeNode"]
-    self.outputSelector.selectNodeUponCreation = True
-    self.outputSelector.addEnabled = True
-    self.outputSelector.removeEnabled = True
-    self.outputSelector.noneEnabled = True
-    self.outputSelector.showHidden = False
-    self.outputSelector.showChildNodeTypes = False
-    self.outputSelector.setMRMLScene( slicer.mrmlScene )
-    self.outputSelector.setToolTip( "Pick the output to the algorithm." )
-    parametersFormLayout.addRow("Output Volume: ", self.outputSelector)
 
     #
     # threshold value
     #
-    self.imageThresholdSliderWidget = ctk.ctkSliderWidget()
-    self.imageThresholdSliderWidget.singleStep = 0.1
-    self.imageThresholdSliderWidget.minimum = -100
-    self.imageThresholdSliderWidget.maximum = 100
-    self.imageThresholdSliderWidget.value = 0.5
-    self.imageThresholdSliderWidget.setToolTip("Set threshold value for computing the output image. Voxels that have intensities lower than this value will set to zero.")
-    parametersFormLayout.addRow("Image threshold", self.imageThresholdSliderWidget)
+    self.numberOfSlicesWidget = ctk.ctkSliderWidget()
+    self.numberOfSlicesWidget.singleStep = 1
+    self.numberOfSlicesWidget.minimum = 50
+    self.numberOfSlicesWidget.maximum = 1000
+    self.numberOfSlicesWidget.value = 500
+    self.numberOfSlicesWidget.setToolTip("Set threshold value for computing the output image. Voxels that have intensities lower than this value will set to zero.")
+    parametersFormLayout.addRow("Number of Slices", self.numberOfSlicesWidget)
 
-    #
-    # check box to trigger taking screen shots for later use in tutorials
-    #
-    self.enableScreenshotsFlagCheckBox = qt.QCheckBox()
-    self.enableScreenshotsFlagCheckBox.checked = 0
-    self.enableScreenshotsFlagCheckBox.setToolTip("If checked, take screen shots for tutorials. Use Save Data to write them to disk.")
-    parametersFormLayout.addRow("Enable Screenshots", self.enableScreenshotsFlagCheckBox)
+    # Compute Distance Button
+    self.distanceButton = qt.QPushButton("Compute Distance")
+    self.distanceButton.toolTip = "Compute Distance between F1 and F2"
+    self.distanceButton.enabled = False
+    parametersFormLayout.addRow(self.distanceButton)
+    self.distanceButton.connect('clicked(bool)', self.ondistanceButton)
+
 
     #
     # Apply Button
@@ -108,11 +92,25 @@ class MIPonPlaneWidget(ScriptedLoadableModuleWidget):
     self.applyButton.toolTip = "Run the algorithm."
     self.applyButton.enabled = False
     parametersFormLayout.addRow(self.applyButton)
+    self.applyButton.connect('clicked(bool)', self.onApplyButton)
+
+    #
+    # Apply MIP
+    #
+    self.applyMIP = qt.QPushButton("Apply MIP")
+    self.applyMIP.toolTip = "MIP algorithm."
+    self.applyMIP.enabled = True
+    parametersFormLayout.addRow(self.applyMIP)
+    self.applyMIP.connect('clicked(bool)', self.onApplyMIP)
+
+    # Results
+    self.distanceValueLabel = qt.QLabel()
+    parametersFormLayout.addRow("Distance between F1 and F2: ", self.distanceValueLabel)
 
     # connections
     self.applyButton.connect('clicked(bool)', self.onApplyButton)
-    self.inputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.onSelect)
-    self.outputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.onSelect)
+
+
 
     # Add vertical spacer
     self.layout.addStretch(1)
@@ -124,166 +122,159 @@ class MIPonPlaneWidget(ScriptedLoadableModuleWidget):
     pass
 
   def onSelect(self):
-    self.applyButton.enabled = self.inputSelector.currentNode() and self.outputSelector.currentNode()
+    self.applyButton.enabled = self.FiducialsSelector.currentNode()
+    self.distanceButton.enabled = self.FiducialsSelector.currentNode()
 
   def onApplyButton(self):
+    pass
+
     logic = MIPonPlaneLogic()
-    enableScreenshotsFlag = self.enableScreenshotsFlagCheckBox.checked
-    imageThreshold = self.imageThresholdSliderWidget.value
-    logic.run(self.inputSelector.currentNode(), self.outputSelector.currentNode(), imageThreshold, enableScreenshotsFlag)
+    self.distanceValue, self.F = logic.calcDistance(self.FiducialsSelector.currentNode())
+    self.distanceValueLabel.setText('%.3f' % self.distanceValue + ' millimeters')
+    logic.run(self.F)
+
+  def ondistanceButton(self):
+    logic = MIPonPlaneLogic()
+    self.distanceValue, F = logic.calcDistance(self.FiducialsSelector.currentNode())
+    self.distanceValueLabel.setText('%.3f' % self.distanceValue + ' millimeters')
+
+  def onApplyMIP(self):
+    pass
+
+    logic = MIPonPlaneLogic()
+    numSlice = int(self.numberOfSlicesWidget.value)
+    #slicefraction customizable....
+    logic.MipOnPlane(numSlice)
+
 
 #
 # MIPonPlaneLogic
 #
 
 class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
-  """This class should implement all the actual
-  computation done by your module.  The interface
-  should be such that other python code can import
-  this class and make use of the functionality without
-  requiring an instance of the Widget.
-  Uses ScriptedLoadableModuleLogic base class, available at:
-  https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
-  """
+  def calcDistance(self, Fiducials):
 
-  def hasImageData(self,volumeNode):
-    """This is an example logic method that
-    returns true if the passed in volume
-    node has valid image data
-    """
-    if not volumeNode:
-      logging.debug('hasImageData failed: no volume node')
-      return False
-    if volumeNode.GetImageData() == None:
-      logging.debug('hasImageData failed: no image data in volume node')
-      return False
-    return True
+    F = numpy.zeros((2, 3))
+    FidCoords = numpy.empty(3)
+    fiducialCount = Fiducials.GetNumberOfFiducials()
+    if fiducialCount == 0:
+      print 'No points found'
+    elif fiducialCount == 1:
+      print 'There is only one point'
 
-  def isValidInputOutputData(self, inputVolumeNode, outputVolumeNode):
-    """Validates if the output is not the same as input
-    """
-    if not inputVolumeNode:
-      logging.debug('isValidInputOutputData failed: no input volume node defined')
-      return False
-    if not outputVolumeNode:
-      logging.debug('isValidInputOutputData failed: no output volume node defined')
-      return False
-    if inputVolumeNode.GetID()==outputVolumeNode.GetID():
-      logging.debug('isValidInputOutputData failed: input and output volume is the same. Create a new volume for output to avoid this error.')
-      return False
-    return True
+    for x in range(fiducialCount):
+      Fiducials.GetNthFiducialPosition(x, FidCoords)
+      F[x] = FidCoords
+    x = numpy.power(F[0, 0] - F[1, 0], 2)
+    y = numpy.power(F[0, 1] - F[1, 1], 2)
+    z = numpy.power(F[0, 2] - F[1, 2], 2)
 
-  def takeScreenshot(self,name,description,type=-1):
-    # show the message even if not taking a screen shot
-    slicer.util.delayDisplay('Take screenshot: '+description+'.\nResult is available in the Annotations module.', 3000)
+    distanceValue = numpy.sqrt((x + y + z))
+    print 'Distance Value between fiducials Computed: ', distanceValue
 
-    lm = slicer.app.layoutManager()
-    # switch on the type to get the requested window
-    widget = 0
-    if type == slicer.qMRMLScreenShotDialog.FullLayout:
-      # full layout
-      widget = lm.viewport()
-    elif type == slicer.qMRMLScreenShotDialog.ThreeD:
-      # just the 3D window
-      widget = lm.threeDWidget(0).threeDView()
-    elif type == slicer.qMRMLScreenShotDialog.Red:
-      # red slice window
-      widget = lm.sliceWidget("Red")
-    elif type == slicer.qMRMLScreenShotDialog.Yellow:
-      # yellow slice window
-      widget = lm.sliceWidget("Yellow")
-    elif type == slicer.qMRMLScreenShotDialog.Green:
-      # green slice window
-      widget = lm.sliceWidget("Green")
+    if distanceValue < 0:
+      slicer.util.delayDisplay("Error Computing Distance")
+      return 1
     else:
-      # default to using the full window
-      widget = slicer.util.mainWindow()
-      # reset the type so that the node is set correctly
-      type = slicer.qMRMLScreenShotDialog.FullLayout
+      return distanceValue, F
 
-    # grab and convert to vtk image data
-    qpixMap = qt.QPixmap().grabWidget(widget)
-    qimage = qpixMap.toImage()
-    imageData = vtk.vtkImageData()
-    slicer.qMRMLUtils().qImageToVtkImageData(qimage,imageData)
-
-    annotationLogic = slicer.modules.annotations.logic()
-    annotationLogic.CreateSnapShot(name, description, type, 1, imageData)
-
-  def run(self, inputVolume, outputVolume, imageThreshold, enableScreenshots=0):
+  def run(self, F):
     """
     Run the actual algorithm
     """
 
-    if not self.isValidInputOutputData(inputVolume, outputVolume):
-      slicer.util.errorDisplay('Input volume is the same as output volume. Choose a different output volume.')
-      return False
-
     logging.info('Processing started')
 
-    # Compute the thresholded output volume using the Threshold Scalar Volume CLI module
-    cliParams = {'InputVolume': inputVolume.GetID(), 'OutputVolume': outputVolume.GetID(), 'ThresholdValue' : imageThreshold, 'ThresholdType' : 'Above'}
-    cliNode = slicer.cli.run(slicer.modules.thresholdscalarvolume, None, cliParams, wait_for_completion=True)
+    P0 = F[0]
+    P1 = F[1]
+    # New Support Point
+    P2 = [P0[0] - 20, P0[1] + 10, P0[2] + 30]
 
-    # Capture screenshot
-    if enableScreenshots:
-      self.takeScreenshot('MIPonPlaneTest-Start','MyScreenshot',-1)
+    # Compute the 3 new axis of LCS (Local Coordinate System)
+    Az = P1 - P0
+    Az = Az / numpy.linalg.norm(Az)
+    Ax = numpy.cross(Az, P2 - P0)
+    Ax = Ax / numpy.linalg.norm(Ax)
+    Ay = numpy.cross(Az, Ax)
 
-    logging.info('Processing completed')
+    # Rototranslation Matrix
+    MRT = numpy.zeros((4, 4))
+    MRT[:3, 0] = Ax
+    MRT[:3, 1] = Ay
+    MRT[:3, 2] = Az
+    MRT[:3, 3] = P0
+    MRT[3, :3] = 0
+    MRT[3, 3] = 1
 
-    return True
+    det = numpy.linalg.det(MRT)
+    print "Determinant: ", det
+
+    self.createNewLinearTransform(MRT)
+
+    # TODO Check why is not working correctly
+    if det == 1:
+      logging.info('Processing completed')
+    else:
+      logging.info("Error computing the rotation")
+      slicer.util.delayDisplay("Error computing the rotation")
+      return False
+
+  def createNewLinearTransform(self, numpyMatrix):
+
+    linearTransformNode = slicer.vtkMRMLLinearTransformNode()
+    transformMatrix = vtk.vtkMatrix4x4()
+    numpyMatrix = numpyMatrix.ravel()
+    numpyMatrix = numpyMatrix.squeeze()
+
+    transformMatrix.DeepCopy([numpyMatrix[0], numpyMatrix[1], numpyMatrix[2], numpyMatrix[3],
+                              numpyMatrix[4], numpyMatrix[5], numpyMatrix[6], numpyMatrix[7],
+                              numpyMatrix[8], numpyMatrix[9], numpyMatrix[10], numpyMatrix[11],
+                              numpyMatrix[12], numpyMatrix[13], numpyMatrix[14], numpyMatrix[15]])
+
+    slicer.mrmlScene.AddNode(linearTransformNode)
+    linearTransformNode.SetAndObserveMatrixTransformToParent(transformMatrix)
+    linearTransformNode.SetName('TransformToLCS')
+    self.moveSliceToNewReferenceFrame(transformMatrix)
+    return transformMatrix
+
+  def moveSliceToNewReferenceFrame(self, transformMatrix):
+
+    redSlice = slicer.mrmlScene.GetNodeByID('vtkMRMLSliceNodeRed')
+    redSlice.SetSliceToRAS(transformMatrix)
+    redSlice.UpdateMatrices()
+    lm = slicer.app.layoutManager()
+    lm.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUpRedSliceView)
+
+  def RotateVolume(self, linearTransformNode):
+
+    scene = slicer.mrmlScene
+    inode = scene.GetNodeByID('vtkMRMLScalarVolumeNode1')
+    event = vtk.vtkIntArray()
+    event.InsertNextValue(slicer.vtkMRMLTransformableNode.TransformModifiedEvent)
+    inode.SetAndObserveNodeReferenceID('transform', 'vtkMRMLLinearTransformNode4', event)
 
 
-class MIPonPlaneTest(ScriptedLoadableModuleTest):
-  """
-  This is the test case for your scripted module.
-  Uses ScriptedLoadableModuleTest base class, available at:
-  https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
-  """
 
-  def setUp(self):
-    """ Do whatever is needed to reset the state - typically a scene clear will be enough.
-    """
-    slicer.mrmlScene.Clear(0)
 
-  def runTest(self):
-    """Run as few or as many tests as needed here.
-    """
-    self.setUp()
-    self.test_MIPonPlane1()
+  def MipOnPlane(self, numSlices):
 
-  def test_MIPonPlane1(self):
-    """ Ideally you should have several levels of tests.  At the lowest level
-    tests should exercise the functionality of the logic with different inputs
-    (both valid and invalid).  At higher levels your tests should emulate the
-    way the user would interact with your code and confirm that it still works
-    the way you intended.
-    One of the most important features of the tests is that it should alert other
-    developers when their changes will have an impact on the behavior of your
-    module.  For example, if a developer removes a feature that you depend on,
-    your test should break so they know that the feature is needed.
-    """
+    sliceNode = slicer.mrmlScene.GetNodeByID('vtkMRMLSliceNodeRed')
+    appLogic = slicer.app.applicationLogic()
+    sliceLogic = appLogic.GetSliceLogic(sliceNode)
+    sliceLayerLogic = sliceLogic.GetBackgroundLayer()
+    reslice = sliceLayerLogic.GetReslice()
+    reslice.SetSlabModeToMax()
+    reslice.SetSlabNumberOfSlices(numSlices)
+    reslice.SetSlabSliceSpacingFraction(0.5)
+    sliceNode.Modified()
 
-    self.delayDisplay("Starting the test")
-    #
-    # first, get some data
-    #
-    import urllib
-    downloads = (
-        ('http://slicer.kitware.com/midas3/download?items=5767', 'FA.nrrd', slicer.util.loadVolume),
-        )
-
-    for url,name,loader in downloads:
-      filePath = slicer.app.temporaryPath + '/' + name
-      if not os.path.exists(filePath) or os.stat(filePath).st_size == 0:
-        logging.info('Requesting download %s from %s...\n' % (name, url))
-        urllib.urlretrieve(url, filePath)
-      if loader:
-        logging.info('Loading %s...' % (name,))
-        loader(filePath)
-    self.delayDisplay('Finished with download and loading')
-
-    volumeNode = slicer.util.getNode(pattern="FA")
-    logic = MIPonPlaneLogic()
-    self.assertTrue( logic.hasImageData(volumeNode) )
-    self.delayDisplay('Test passed!')
+# The way it works is this: vtkImageReslice is creating the slab by
+# extracting N samples and combining them, where the distance between
+# the samples is set by the third argument to SetOutputSpacing().  If
+# the SlabNumberOfSlices is N, then the slab thickness is
+# (N-1)*spacing[2] where spacing[2] is the z-spacing set with
+# SetOutputSpacing(spacing[0],spacing[1],spacing[2]).
+#
+# Summary: thickness = (N - 1)*spacing[2]
+#
+# Slab mode is equivalent to extracting N slices and combining them.
