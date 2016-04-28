@@ -67,15 +67,27 @@ class MIPonPlaneWidget(ScriptedLoadableModuleWidget):
 
 
     #
-    # threshold value
+    # Set Slab value
     #
     self.numberOfSlicesWidget = ctk.ctkSliderWidget()
-    self.numberOfSlicesWidget.singleStep = 1
+    self.numberOfSlicesWidget.singleStep = 5
     self.numberOfSlicesWidget.minimum = 50
     self.numberOfSlicesWidget.maximum = 1000
     self.numberOfSlicesWidget.value = 500
-    self.numberOfSlicesWidget.setToolTip("Set threshold value for computing the output image. Voxels that have intensities lower than this value will set to zero.")
+    self.numberOfSlicesWidget.setToolTip("Set the number of slices.")
     parametersFormLayout.addRow("Number of Slices", self.numberOfSlicesWidget)
+
+    #
+    # Set SpacingFraction
+    #
+    self.spacingFractionWidget = ctk.ctkSliderWidget()
+    self.spacingFractionWidget.singleStep = 0.05
+    self.spacingFractionWidget.minimum = 0.2
+    self.spacingFractionWidget.maximum = 1
+    self.spacingFractionWidget.value = 0.5
+    self.spacingFractionWidget.setToolTip(
+      "Set Spacing Fraction to reduce interpolation artifacts")
+    parametersFormLayout.addRow("Spacing Fraction", self.spacingFractionWidget)
 
     # Compute Distance Button
     self.distanceButton = qt.QPushButton("Compute Distance")
@@ -102,6 +114,15 @@ class MIPonPlaneWidget(ScriptedLoadableModuleWidget):
     self.applyMIP.enabled = True
     parametersFormLayout.addRow(self.applyMIP)
     self.applyMIP.connect('clicked(bool)', self.onApplyMIP)
+
+    #
+    # Remove MIP
+    #
+    self.removeMIP = qt.QPushButton("Remove MIP")
+    self.removeMIP.toolTip = "MIP algorithm."
+    self.removeMIP.enabled = True
+    parametersFormLayout.addRow(self.removeMIP)
+    self.removeMIP.connect('clicked(bool)', self.onRemoveMIP)
 
     # Results
     self.distanceValueLabel = qt.QLabel()
@@ -142,10 +163,15 @@ class MIPonPlaneWidget(ScriptedLoadableModuleWidget):
     pass
 
     logic = MIPonPlaneLogic()
-    numSlice = int(self.numberOfSlicesWidget.value)
-    #slicefraction customizable....
-    logic.MipOnPlane(numSlice)
+    Slab = int(self.numberOfSlicesWidget.value)
+    SpacingFraction = self.spacingFractionWidget.value
+    logic.MipOnPlane(Slab, SpacingFraction)
 
+  def onRemoveMIP(self):
+    pass
+
+    logic = MIPonPlaneLogic()
+    logic.RemoveMIP()
 
 #
 # MIPonPlaneLogic
@@ -211,13 +237,13 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
 
     self.createNewLinearTransform(MRT)
 
-    # TODO Check why is not working correctly
-    if det == 1:
-      logging.info('Processing completed')
-    else:
-      logging.info("Error computing the rotation")
-      slicer.util.delayDisplay("Error computing the rotation")
-      return False
+    # # TODO Check why is not working correctly
+    # if det == 1:
+    #   logging.info('Processing completed')
+    # else:
+    #   logging.info("Error computing the rotation")
+    #   slicer.util.delayDisplay("Error computing the rotation")
+    #   return False
 
   def createNewLinearTransform(self, numpyMatrix):
 
@@ -245,6 +271,8 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
     lm = slicer.app.layoutManager()
     lm.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUpRedSliceView)
 
+   #UNUSED#
+
   def RotateVolume(self, linearTransformNode):
 
     scene = slicer.mrmlScene
@@ -254,9 +282,8 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
     inode.SetAndObserveNodeReferenceID('transform', 'vtkMRMLLinearTransformNode4', event)
 
 
+  def MipOnPlane(self, Slab, SpacingFraction):
 
-
-  def MipOnPlane(self, numSlices):
 
     sliceNode = slicer.mrmlScene.GetNodeByID('vtkMRMLSliceNodeRed')
     appLogic = slicer.app.applicationLogic()
@@ -264,17 +291,23 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
     sliceLayerLogic = sliceLogic.GetBackgroundLayer()
     reslice = sliceLayerLogic.GetReslice()
     reslice.SetSlabModeToMax()
-    reslice.SetSlabNumberOfSlices(numSlices)
-    reslice.SetSlabSliceSpacingFraction(0.5)
+    reslice.SetSlabNumberOfSlices(Slab)
+    reslice.SetSlabSliceSpacingFraction(SpacingFraction)
     sliceNode.Modified()
 
-# The way it works is this: vtkImageReslice is creating the slab by
-# extracting N samples and combining them, where the distance between
-# the samples is set by the third argument to SetOutputSpacing().  If
-# the SlabNumberOfSlices is N, then the slab thickness is
-# (N-1)*spacing[2] where spacing[2] is the z-spacing set with
-# SetOutputSpacing(spacing[0],spacing[1],spacing[2]).
-#
-# Summary: thickness = (N - 1)*spacing[2]
-#
-# Slab mode is equivalent to extracting N slices and combining them.
+
+
+  def RemoveMIP(self):
+
+
+    sliceNode = slicer.mrmlScene.GetNodeByID('vtkMRMLSliceNodeRed')
+    appLogic = slicer.app.applicationLogic()
+    sliceLogic = appLogic.GetSliceLogic(sliceNode)
+    sliceLayerLogic = sliceLogic.GetBackgroundLayer()
+    reslice = sliceLayerLogic.GetReslice()
+    reslice.SetSlabModeToMean() #default value
+    reslice.SetSlabNumberOfSlices(1) #default value
+    reslice.SetSlabSliceSpacingFraction(1) #default value
+    sliceNode.Modified()
+
+
