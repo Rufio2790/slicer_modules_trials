@@ -67,13 +67,13 @@ class MIPonPlaneWidget(ScriptedLoadableModuleWidget):
 
 
     #
-    # Set Slab value
+    # Set Slice value
     #
     self.numberOfSlicesWidget = ctk.ctkSliderWidget()
-    self.numberOfSlicesWidget.singleStep = 5
-    self.numberOfSlicesWidget.minimum = 50
+    self.numberOfSlicesWidget.singleStep = 1
+    self.numberOfSlicesWidget.minimum = 1
     self.numberOfSlicesWidget.maximum = 1000
-    self.numberOfSlicesWidget.value = 500
+    self.numberOfSlicesWidget.value = 50
     self.numberOfSlicesWidget.setToolTip("Set the number of slices.")
     parametersFormLayout.addRow("Number of Slices", self.numberOfSlicesWidget)
 
@@ -82,7 +82,7 @@ class MIPonPlaneWidget(ScriptedLoadableModuleWidget):
     #
     self.spacingFractionWidget = ctk.ctkSliderWidget()
     self.spacingFractionWidget.singleStep = 0.05
-    self.spacingFractionWidget.minimum = 0.2
+    self.spacingFractionWidget.minimum = 0.1
     self.spacingFractionWidget.maximum = 1
     self.spacingFractionWidget.value = 0.5
     self.spacingFractionWidget.setToolTip(
@@ -147,7 +147,6 @@ class MIPonPlaneWidget(ScriptedLoadableModuleWidget):
     self.distanceButton.enabled = self.FiducialsSelector.currentNode()
 
   def onApplyButton(self):
-    pass
 
     logic = MIPonPlaneLogic()
     self.distanceValue, self.F = logic.calcDistance(self.FiducialsSelector.currentNode())
@@ -160,7 +159,6 @@ class MIPonPlaneWidget(ScriptedLoadableModuleWidget):
     self.distanceValueLabel.setText('%.3f' % self.distanceValue + ' millimeters')
 
   def onApplyMIP(self):
-    pass
 
     logic = MIPonPlaneLogic()
     Slab = int(self.numberOfSlicesWidget.value)
@@ -168,7 +166,6 @@ class MIPonPlaneWidget(ScriptedLoadableModuleWidget):
     logic.MipOnPlane(Slab, SpacingFraction)
 
   def onRemoveMIP(self):
-    pass
 
     logic = MIPonPlaneLogic()
     logic.RemoveMIP()
@@ -257,7 +254,10 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
                               numpyMatrix[8], numpyMatrix[9], numpyMatrix[10], numpyMatrix[11],
                               numpyMatrix[12], numpyMatrix[13], numpyMatrix[14], numpyMatrix[15]])
 
-    slicer.mrmlScene.AddNode(linearTransformNode)
+    TransfNode = slicer.util.getNode('TransformToLCS')
+    if not TransfNode:
+       slicer.mrmlScene.AddNode(linearTransformNode)
+       print 'ciao'
     linearTransformNode.SetAndObserveMatrixTransformToParent(transformMatrix)
     linearTransformNode.SetName('TransformToLCS')
     self.moveSliceToNewReferenceFrame(transformMatrix)
