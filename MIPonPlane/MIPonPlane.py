@@ -52,7 +52,24 @@ class MIPonPlaneWidget(ScriptedLoadableModuleWidget):
     # Layout within the dummy collapsible button
     parametersFormLayout = qt.QFormLayout(parametersCollapsibleButton)
 
+    #
+    # input volume selector
+    #
+    self.inputSelector = slicer.qMRMLNodeComboBox()
+    self.inputSelector.nodeTypes = ["vtkMRMLScalarVolumeNode"]
+    self.inputSelector.selectNodeUponCreation = True
+    self.inputSelector.addEnabled = False
+    self.inputSelector.removeEnabled = False
+    self.inputSelector.noneEnabled = False
+    self.inputSelector.showHidden = False
+    self.inputSelector.showChildNodeTypes = False
+    self.inputSelector.setMRMLScene(slicer.mrmlScene)
+    self.inputSelector.setToolTip("Pick the input to the algorithm.")
+    parametersFormLayout.addRow("Input Volume: ", self.inputSelector)
+
+    #
     # fiducials
+    #
     self.FiducialsSelector = slicer.qMRMLNodeComboBox()
     self.FiducialsSelector.nodeTypes = (("vtkMRMLMarkupsFiducialNode"), "")
     self.FiducialsSelector.selectNodeUponCreation = True
@@ -124,13 +141,22 @@ class MIPonPlaneWidget(ScriptedLoadableModuleWidget):
     parametersFormLayout.addRow(self.removeMIP)
     self.removeMIP.connect('clicked(bool)', self.onRemoveMIP)
 
+    #
+    # Export MIP Button
+    #
+    self.ExportMIPButton = qt.QPushButton("Export MIP Image")
+    self.ExportMIPButton.toolTip = "Export MIP for MATLAB."
+    self.ExportMIPButton.enabled = False
+    parametersFormLayout.addRow(self.ExportMIPButton)
+    self.ExportMIPButton.connect('clicked(bool)', self.onExportMIPButton)
+
     # Results
     self.distanceValueLabel = qt.QLabel()
     parametersFormLayout.addRow("Distance between F1 and F2: ", self.distanceValueLabel)
 
     # connections
     self.applyButton.connect('clicked(bool)', self.onApplyButton)
-
+    self.inputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.onSelect)
 
 
     # Add vertical spacer
@@ -145,13 +171,14 @@ class MIPonPlaneWidget(ScriptedLoadableModuleWidget):
   def onSelect(self):
     self.applyButton.enabled = self.FiducialsSelector.currentNode()
     self.distanceButton.enabled = self.FiducialsSelector.currentNode()
+    self.ExportMIPButton.enabled = self.inputSelector.currentNode()
 
   def onApplyButton(self):
 
     logic = MIPonPlaneLogic()
     self.distanceValue, self.F = logic.calcDistance(self.FiducialsSelector.currentNode())
     self.distanceValueLabel.setText('%.3f' % self.distanceValue + ' millimeters')
-    logic.run(self.F)
+    self.MRT = logic.run(self.F)
 
   def ondistanceButton(self):
     logic = MIPonPlaneLogic()
@@ -163,12 +190,17 @@ class MIPonPlaneWidget(ScriptedLoadableModuleWidget):
     logic = MIPonPlaneLogic()
     Slab = int(self.numberOfSlicesWidget.value)
     SpacingFraction = self.spacingFractionWidget.value
-    logic.MipOnPlane(Slab, SpacingFraction)
+    self.reslice = logic.MipOnPlane(Slab, SpacingFraction)
 
   def onRemoveMIP(self):
 
     logic = MIPonPlaneLogic()
     logic.RemoveMIP()
+
+  def onExportMIPButton(self):
+    logic = MIPonPlaneLogic()
+    logic.ExportMIP(self.inputSelector.currentNode(), self.MRT)
+
 
 #
 # MIPonPlaneLogic
@@ -234,6 +266,8 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
 
     self.createNewLinearTransform(MRT)
 
+    return MRT
+
     # # TODO Check why is not working correctly
     # if det == 1:
     #   logging.info('Processing completed')
@@ -257,7 +291,6 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
     TransfNode = slicer.util.getNode('TransformToLCS')
     if not TransfNode:
        slicer.mrmlScene.AddNode(linearTransformNode)
-       print 'ciao'
     linearTransformNode.SetAndObserveMatrixTransformToParent(transformMatrix)
     linearTransformNode.SetName('TransformToLCS')
     self.moveSliceToNewReferenceFrame(transformMatrix)
@@ -294,6 +327,7 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
     reslice.SetSlabNumberOfSlices(Slab)
     reslice.SetSlabSliceSpacingFraction(SpacingFraction)
     sliceNode.Modified()
+    return reslice
 
 
 
@@ -311,3 +345,53 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
     sliceNode.Modified()
 
 
+  def ExportMIP(self, inputVolume,  MRT):
+    """
+    This function is to create a new volume containing the Xray and display in the Slicer Scene
+    """
+
+    #extract input volume information
+
+    inputVolumeData = inputVolume.GetImageData()
+
+    #reslice Filter
+    resliceFilter = vtk.vtkImageReslice()
+    resliceFilter.SetInputData(inputVolumeData)
+
+    # #The Output dimensionality need to be fixed on '2' in order to extract a single slice.
+    resliceFilter.SetOutputDimensionality(2)
+    Spacing = inputVolume.GetSpacing()
+    resliceFilter.SetOutputSpacing(Spacing[0],Spacing[1],Spacing[2]) # FIXME recuperare spacing del volume in input
+    resliceFilter.SetSlabModeToMax()
+    resliceFilter.SetSlabNumberOfSlices(50)
+    resliceFilter.SetSlabSliceSpacingFraction(0.5)
+    # #set reslices axes origin in order to get the slice I want
+    resliceFilter.SetResliceAxesOrigin(MRT[:3, 3])
+    # #direction cosine for standard axial slice
+    resliceFilter.SetResliceAxesDirectionCosines(MRT[:3, 0],MRT[:3, 1],MRT[:3, 2])
+
+    # #Update the filter
+    resliceFilter.Update()
+
+    #Create a Volume and fill it with the resliceFilter Output
+    Origin = inputVolume.GetOrigin()
+    self.volumeNode = slicer.vtkMRMLScalarVolumeNode()
+    self.volumeNode.SetSpacing(Spacing[0],Spacing[1],Spacing[2])
+    self.volumeNode.SetImageDataConnection(resliceFilter.GetOutputPort())
+    #self.volumeNode.SetIJKToRASMatrix(transformMatrix)
+    self.volumeNode.SetOrigin(Origin)
+    # self.imageData = self.volumeNode.GetImageData()
+    # self.imageData.SetExtent(inputVolumeExtent[0], inputVolumeExtent[1], inputVolumeExtent[2], inputVolumeExtent[3], 0, 0)
+
+    # Add volume to scene
+    slicer.mrmlScene.AddNode(self.volumeNode)
+    displayNode = slicer.vtkMRMLScalarVolumeDisplayNode()
+    slicer.mrmlScene.AddNode(displayNode)
+    colorNode = slicer.util.getNode('Grey')
+    displayNode.SetAndObserveColorNodeID(colorNode.GetID())
+    self.volumeNode.SetAndObserveDisplayNodeID(displayNode.GetID())
+    self.volumeNode.CreateDefaultStorageNode()
+    self.volumeNode.SetName('MIP')
+    self.name = self.volumeNode.GetName()
+
+    print "MIP extracted"
