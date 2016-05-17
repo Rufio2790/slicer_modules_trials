@@ -179,8 +179,8 @@ class MIPonPlaneWidget(ScriptedLoadableModuleWidget):
     self.distanceValue, self.F = logic.calcDistance(self.FiducialsSelector.currentNode())
     self.distanceValueLabel.setText('%.3f' % self.distanceValue + ' millimeters')
     self.MRT = logic.run(self.F)
-    self.VTKtransform = logic.numpyMatrixtoVTKtransform(self.MRT)
-    logic.slice(self.inputSelector.currentNode(), 'sagittal', 80, self.VTKtransform)
+    # self.VTKtransform = logic.numpyMatrixtoVTKtransform(self.MRT)
+    # logic.slice(self.inputSelector.currentNode(), 'sagittal', 80, self.VTKtransform)
 
   def ondistanceButton(self):
     logic = MIPonPlaneLogic()
@@ -204,10 +204,7 @@ class MIPonPlaneWidget(ScriptedLoadableModuleWidget):
 
   def onExportMIPButton(self):
     logic = MIPonPlaneLogic()
-    self.AXreslice = logic.resliceAxial(self.inputSelector.currentNode(),80)
-    self.SAreslice = logic.resliceSagittal(self.inputSelector.currentNode(), 80)
-    self.COreslice = logic.resliceCoronal(self.inputSelector.currentNode(), 80)
-    logic.ViewReslice(self.AXreslice, self.SAreslice, self.COreslice )
+    logic.slice(self.inputSelector.currentNode(), 'coronal', 80)
 
     #logic.ExportMIP()
     #Origin = self.inputSelector.currentNode().GetOrigin()
@@ -569,41 +566,23 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
 
         return transformMatrix
 
-  def slice(self, Volume, Orientation, slice, VTKtransform):
+  def slice(self, Volume, Orientation, slice):
       # reader is the input VTK volume
       # Calculate the center of the volume
-      # ImageSet.UpdateInformation()
       ImageSet = Volume.GetImageData()
       (xMin, xMax, yMin, yMax, zMin, zMax) = ImageSet.GetExtent()
-      (xSpacing, ySpacing, zSpacing) = Volume.GetSpacing()
-      (x0, y0, z0) = Volume.GetOrigin()
-      print xSpacing, ySpacing, zSpacing
-      print x0, y0, z0
+      Spacing = Volume.GetSpacing()
+      Origin = Volume.GetOrigin()
+      print Spacing
+      print Origin
 
-      center = [x0 + xSpacing * 0.5 * (xMin + xMax),
-                y0 + ySpacing * 0.5 * (yMin + yMax),
-                z0 + zSpacing * 0.5 * (zMin + zMax)]
+      center = [Origin[0] + Spacing[0] * 0.5 * (xMin + xMax),
+                Origin[1] + Spacing[1] * 0.5 * (yMin + yMax),
+                Origin[2] + Spacing[2] * 0.5 * (zMin + zMax)]
       print center
 
       # Matrices for axial, coronal, sagittal, oblique view orientations
-      axial = vtk.vtkMatrix4x4()
-      axial.DeepCopy((1, 0, 0, center[0],
-                      0, 1, 0, center[1],
-                      0, 0, 1, slice,
-                      0, 0, 0, 1))
-
-      sagittal = vtk.vtkMatrix4x4()
-      sagittal.DeepCopy((0, 0, -1, slice,
-                         1, 0, 0, center[1],
-                         0, -1, 0, center[2],
-                         0, 0, 0, 1))
-
-      coronal = vtk.vtkMatrix4x4()
-      coronal.DeepCopy((1, 0, 0, center[0],
-                        0, 0, 1, slice,
-                        0, -1, 0, center[2],
-                        0, 0, 0, 1))
-      oblique = VTKtransform
+      #
       # oblique = vtk.vtkMatrix4x4()
       # oblique.DeepCopy((-0.80004219, 0.51246626, 0.31194682, -105.82500458,
       #                   0.14579368, 0.67044516, -0.72749398, -79.90791493,
@@ -611,32 +590,80 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
       #                   0, 0, 0, 1))
 
       # Extract a slice in the desired orientation
-      reslice = vtk.vtkImageReslice()
-      reslice.SetInterpolationModeToLinear()
-      reslice.SetInputData(ImageSet)
-      reslice.SetOutputDimensionality(2)
       #reslice.SetBlendModeToMax()
       #reslice.SetResliceAxesOrigin(10, 20, 20)
       if Orientation == 'axial':
-          reslice.SetResliceAxes(axial)
+
+          axial = vtk.vtkMatrix4x4()
+          axial.DeepCopy((1, 0, 0, center[0],
+                          0, 1, 0, center[1],
+                          0, 0, 1, slice,
+                          0, 0, 0, 1))
+
+          AXreslice = vtk.vtkImageReslice()
+          AXreslice.SetInterpolationModeToLinear()
+          AXreslice.SetInputData(ImageSet)
+          AXreslice.SetOutputDimensionality(2)
+          AXreslice.SetResliceAxes(axial)
+          #AXreslice.SetOutputSpacing(xSpacing, ySpacing, zSpacing)
+          AXreslice.Update()
+          self.ViewReslice(AXreslice,'axial', Spacing, Origin)
+
       elif Orientation == 'sagittal':
-          reslice.SetResliceAxes(sagittal)
+
+          sagittal = vtk.vtkMatrix4x4()
+          sagittal.DeepCopy((0, 0, -1, slice,
+                             1, 0, 0, center[1],
+                             0, -1, 0, center[2],
+                             0, 0, 0, 1))
+
+          SAreslice = vtk.vtkImageReslice()
+          SAreslice.SetInterpolationModeToLinear()
+          SAreslice.SetInputData(ImageSet)
+          SAreslice.SetOutputDimensionality(2)
+          SAreslice.SetResliceAxes(sagittal)
+          #SAreslice.SetOutputSpacing(xSpacing, ySpacing, zSpacing)
+          SAreslice.Update()
+          self.ViewReslice(SAreslice,'sagittal', Spacing, Origin)
+
       elif Orientation == 'coronal':
-          reslice.SetResliceAxes(coronal)
+
+          coronal = vtk.vtkMatrix4x4()
+          coronal.DeepCopy((1, 0, 0, center[0],
+                            0, 0, 1, slice,
+                            0, -1, 0, center[2],
+                            0, 0, 0, 1))
+
+          COreslice = vtk.vtkImageReslice()
+          COreslice.SetInterpolationModeToLinear()
+          COreslice.SetInputData(ImageSet)
+          COreslice.SetOutputDimensionality(2)
+          COreslice.SetResliceAxes(coronal)
+          #COreslice.SetOutputSpacing(xSpacing, ySpacing, zSpacing)
+          COreslice.Update()
+          self.ViewReslice(COreslice,'coronal', Spacing, Origin)
+
       elif Orientation == 'oblique':
-          reslice.SetResliceAxes(oblique)
+          #oblique = VTKtransform
+          OBreslice = vtk.vtkImageReslice()
+          OBreslice.SetInterpolationModeToLinear()
+          OBreslice.SetInputData(ImageSet)
+          OBreslice.SetOutputDimensionality(2)
+          #OBreslice.SetResliceAxes(oblique)
+          OBreslice.Update()
+          self.ViewReslice(OBreslice, 'oblique', Spacing, Origin)
 
       #reslice.AutoCropOutputOn()
-      reslice.SetSlabModeToMax()
-      reslice.SetSlabNumberOfSlices(50)
-      reslice.SetSlabSliceSpacingFraction(0.5)
-      reslice.Update()
-      NewImage = reslice.GetOutput()
-      volumeNode = slicer.vtkMRMLScalarVolumeNode()
-      volumeNode.SetName('ResVolume2')
-      volumeNode.SetAndObserveImageData(NewImage)
-      slicer.mrmlScene.AddNode(volumeNode)
-      volumeNode.CreateDefaultDisplayNodes()
+      # reslice.SetSlabModeToMax()
+      # reslice.SetSlabNumberOfSlices(50)
+      # reslice.SetSlabSliceSpacingFraction(0.5)
+      # reslice.Update()
+      # NewImage = reslice.GetOutput()
+      # volumeNode = slicer.vtkMRMLScalarVolumeNode()
+      # volumeNode.SetName('ResVolume2')
+      # volumeNode.SetAndObserveImageData(NewImage)
+      # slicer.mrmlScene.AddNode(volumeNode)
+      # volumeNode.CreateDefaultDisplayNodes()
 
       # -0.452758 0.771055 -0.447754 -105.825
       # 0.710518  0.00861362 -0.703626 -73.6986
@@ -644,103 +671,42 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
       # 0    0      0      1
 
 
-  def resliceAxial(self, Volume, slice):
 
-      ImageSet = Volume.GetImageData()
-      (xMin, xMax, yMin, yMax, zMin, zMax) = ImageSet.GetExtent()
-      (xSpacing, ySpacing, zSpacing) = Volume.GetSpacing()
-      (x0, y0, z0) = Volume.GetOrigin()
-      print xMin, xMax, yMin, yMax, zMin, zMax
+  def ViewReslice (self, reslice, Orientation, Spacing, Origin):
 
-      center = [x0 + xSpacing * 0.5 * (xMin + xMax),
-                y0 + ySpacing * 0.5 * (yMin + yMax),
-                z0 + zSpacing * 0.5 * (zMin + zMax)]
-      print center
+      if Orientation == 'axial':
+        Image = reslice.GetOutput()
+        volumeNode = slicer.vtkMRMLScalarVolumeNode()
+        volumeNode.SetName('AxialSlice')
+        volumeNode.SetAndObserveImageData(Image)
+        volumeNode.SetSpacing(Spacing[0],Spacing[1],1.0)
+        volumeNode.SetOrigin(Origin)
+        slicer.mrmlScene.AddNode(volumeNode)
+        volumeNode.CreateDefaultDisplayNodes()
 
-      axial = vtk.vtkMatrix4x4()
-      axial.DeepCopy((1, 0, 0, center[0],
-                      0, 1, 0, center[1],
-                      0, 0, 1, slice,
-                      0, 0, 0, 1))
-      AXreslice = vtk.vtkImageReslice()
-      AXreslice.SetInterpolationModeToLinear()
-      AXreslice.SetInputData(ImageSet)
-      AXreslice.SetOutputDimensionality(2)
-      AXreslice.SetResliceAxes(axial)
-      AXreslice.Update()
+      elif Orientation == 'coronal':
+          Image = reslice.GetOutput()
+          volumeNode = slicer.vtkMRMLScalarVolumeNode()
+          volumeNode.SetName('CoronalSlice')
+          volumeNode.SetAndObserveImageData(Image)
+          volumeNode.SetSpacing(Spacing[0],Spacing[2], 1.0)
+          volumeNode.SetOrigin(Origin)
+          slicer.mrmlScene.AddNode(volumeNode)
+          volumeNode.CreateDefaultDisplayNodes()
 
-      return AXreslice
-
-  def resliceSagittal(self, Volume, slice):
-
-      ImageSet = Volume.GetImageData()
-      (xMin, xMax, yMin, yMax, zMin, zMax) = ImageSet.GetExtent()
-      (xSpacing, ySpacing, zSpacing) = Volume.GetSpacing()
-      (x0, y0, z0) = Volume.GetOrigin()
-
-      center = [x0 + xSpacing * 0.5 * (xMin + xMax),
-                y0 + ySpacing * 0.5 * (yMin + yMax),
-                z0 + zSpacing * 0.5 * (zMin + zMax)]
-
-      sagittal = vtk.vtkMatrix4x4()
-      sagittal.DeepCopy((0, 0, -1, slice,
-                         1, 0, 0, center[1],
-                         0, -1, 0, center[2],
-                         0, 0, 0, 1))
-      SAreslice = vtk.vtkImageReslice()
-      SAreslice.SetInterpolationModeToLinear()
-      SAreslice.SetInputData(ImageSet)
-      SAreslice.SetOutputDimensionality(2)
-      SAreslice.SetResliceAxes(sagittal)
-      SAreslice.Update()
-
-      return SAreslice
-
-  def resliceCoronal(self, Volume, slice):
-
-      ImageSet = Volume.GetImageData()
-      (xMin, xMax, yMin, yMax, zMin, zMax) = ImageSet.GetExtent()
-      (xSpacing, ySpacing, zSpacing) = Volume.GetSpacing()
-      (x0, y0, z0) = Volume.GetOrigin()
-
-      center = [x0 + xSpacing * 0.5 * (xMin + xMax),
-                y0 + ySpacing * 0.5 * (yMin + yMax),
-                z0 + zSpacing * 0.5 * (zMin + zMax)]
-
-      coronal = vtk.vtkMatrix4x4()
-      coronal.DeepCopy((1, 0, 0, center[0],
-                        0, 0, 1, slice,
-                        0, -1, 0, center[2],
-                        0, 0, 0, 1))
-      COreslice = vtk.vtkImageReslice()
-      COreslice.SetInterpolationModeToLinear()
-      COreslice.SetInputData(ImageSet)
-      COreslice.SetOutputDimensionality(2)
-      COreslice.SetResliceAxes(coronal)
-      COreslice.Update()
-
-      return COreslice
-
-  def ViewReslice (self, AXreslice, COreslice, SAreslice):
-
-      #Axial
-      AxImage = AXreslice.GetOutput()
-      AXvolumeNode = slicer.vtkMRMLScalarVolumeNode()
-      AXvolumeNode.SetName('AxialSlice')
-      AXvolumeNode.SetAndObserveImageData(AxImage)
-      slicer.mrmlScene.AddNode(AXvolumeNode)
-      AXvolumeNode.CreateDefaultDisplayNodes()
-      # Coronal
-      CoImage = COreslice.GetOutput()
-      COvolumeNode = slicer.vtkMRMLScalarVolumeNode()
-      COvolumeNode.SetName('CoronalSlice')
-      COvolumeNode.SetAndObserveImageData(CoImage)
-      slicer.mrmlScene.AddNode(COvolumeNode)
-      COvolumeNode.CreateDefaultDisplayNodes()
-      # Sagittal
-      SaImage = SAreslice.GetOutput()
-      SAvolumeNode = slicer.vtkMRMLScalarVolumeNode()
-      SAvolumeNode.SetName('SagittalSlice')
-      SAvolumeNode.SetAndObserveImageData(SaImage)
-      slicer.mrmlScene.AddNode(SAvolumeNode)
-      SAvolumeNode.CreateDefaultDisplayNodes()
+      elif Orientation == 'sagittal':
+          Image = reslice.GetOutput()
+          volumeNode = slicer.vtkMRMLScalarVolumeNode()
+          volumeNode.SetName('SagittalSlice')
+          volumeNode.SetAndObserveImageData(Image)
+          volumeNode.SetSpacing(Spacing[1],Spacing[2],1.0)
+          volumeNode.SetOrigin(Origin)
+          slicer.mrmlScene.AddNode(volumeNode)
+          volumeNode.CreateDefaultDisplayNodes()
+      elif Orientation == 'oblique':
+          Image = reslice.GetOutput()
+          volumeNode = slicer.vtkMRMLScalarVolumeNode()
+          volumeNode.SetName('ObliqueSlice')
+          volumeNode.SetAndObserveImageData(Image)
+          slicer.mrmlScene.AddNode(volumeNode)
+          volumeNode.CreateDefaultDisplayNodes()
