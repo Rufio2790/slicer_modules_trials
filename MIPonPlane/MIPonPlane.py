@@ -204,7 +204,10 @@ class MIPonPlaneWidget(ScriptedLoadableModuleWidget):
 
   def onExportMIPButton(self):
     logic = MIPonPlaneLogic()
-    logic.slice(self.inputSelector.currentNode(), 'coronal', 80)
+    self.distanceValue, self.F = logic.calcDistance(self.FiducialsSelector.currentNode())
+    self.MRT = logic.run(self.F)
+    self.VTKtransform = logic.numpyMatrixtoVTKtransform(self.MRT)
+    logic.slice(self.inputSelector.currentNode(), 'oblique', 80, self.VTKtransform)
 
     #logic.ExportMIP()
     #Origin = self.inputSelector.currentNode().GetOrigin()
@@ -566,28 +569,19 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
 
         return transformMatrix
 
-  def slice(self, Volume, Orientation, slice):
+  def slice(self, Volume, Orientation, slice, VTKtransform):
       # reader is the input VTK volume
       # Calculate the center of the volume
       ImageSet = Volume.GetImageData()
       (xMin, xMax, yMin, yMax, zMin, zMax) = ImageSet.GetExtent()
       Spacing = Volume.GetSpacing()
       Origin = Volume.GetOrigin()
-      print Spacing
-      print Origin
 
       center = [Origin[0] + Spacing[0] * 0.5 * (xMin + xMax),
                 Origin[1] + Spacing[1] * 0.5 * (yMin + yMax),
                 Origin[2] + Spacing[2] * 0.5 * (zMin + zMax)]
       print center
 
-      # Matrices for axial, coronal, sagittal, oblique view orientations
-      #
-      # oblique = vtk.vtkMatrix4x4()
-      # oblique.DeepCopy((-0.80004219, 0.51246626, 0.31194682, -105.82500458,
-      #                   0.14579368, 0.67044516, -0.72749398, -79.90791493,
-      #                   -0.58195936, -0.536546, -0.61109876, -54.29772643,
-      #                   0, 0, 0, 1))
 
       # Extract a slice in the desired orientation
       #reslice.SetBlendModeToMax()
@@ -605,7 +599,9 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
           AXreslice.SetInputData(ImageSet)
           AXreslice.SetOutputDimensionality(2)
           AXreslice.SetResliceAxes(axial)
-          #AXreslice.SetOutputSpacing(xSpacing, ySpacing, zSpacing)
+          AXreslice.SetSlabModeToMax()
+          AXreslice.SetSlabNumberOfSlices(50)
+          AXreslice.SetSlabSliceSpacingFraction(0.5)
           AXreslice.Update()
           self.ViewReslice(AXreslice,'axial', Spacing, Origin)
 
@@ -622,7 +618,9 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
           SAreslice.SetInputData(ImageSet)
           SAreslice.SetOutputDimensionality(2)
           SAreslice.SetResliceAxes(sagittal)
-          #SAreslice.SetOutputSpacing(xSpacing, ySpacing, zSpacing)
+          SAreslice.SetSlabModeToMax()
+          SAreslice.SetSlabNumberOfSlices(50)
+          SAreslice.SetSlabSliceSpacingFraction(0.5)
           SAreslice.Update()
           self.ViewReslice(SAreslice,'sagittal', Spacing, Origin)
 
@@ -639,17 +637,30 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
           COreslice.SetInputData(ImageSet)
           COreslice.SetOutputDimensionality(2)
           COreslice.SetResliceAxes(coronal)
-          #COreslice.SetOutputSpacing(xSpacing, ySpacing, zSpacing)
+          COreslice.SetSlabModeToMax()
+          COreslice.SetSlabNumberOfSlices(50)
+          COreslice.SetSlabSliceSpacingFraction(0.5)
           COreslice.Update()
           self.ViewReslice(COreslice,'coronal', Spacing, Origin)
 
       elif Orientation == 'oblique':
-          #oblique = VTKtransform
+          matrix = VTKtransform
+          oblique = vtk.vtkMatrix4x4()
+          oblique.DeepCopy((1, 0, 0, center[0], # matrix.GetElement(0,3)
+                            0, 0.866025404, -0.5, center[1], #matrix.GetElement(1,3)
+                            0, 0.5, 0.866025404, center[2],  #matrix.GetElement(2,3)
+                            0, 0, 0, 1))
           OBreslice = vtk.vtkImageReslice()
           OBreslice.SetInterpolationModeToLinear()
           OBreslice.SetInputData(ImageSet)
           OBreslice.SetOutputDimensionality(2)
-          #OBreslice.SetResliceAxes(oblique)
+          # d = vtk.vtkMatrixToHomogeneousTransform() #Provo a convertire da una vtk4X4 ad un'abstract transform per poi
+          # d.SetInput(oblique)                        #usare SetResliceTransform
+          # oblique = d.MakeTransform()
+          OBreslice.SetResliceAxes(oblique)
+          OBreslice.SetSlabModeToMax()
+          OBreslice.SetSlabNumberOfSlices(50)
+          OBreslice.SetSlabSliceSpacingFraction(0.5)
           OBreslice.Update()
           self.ViewReslice(OBreslice, 'oblique', Spacing, Origin)
 
@@ -664,11 +675,6 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
       # volumeNode.SetAndObserveImageData(NewImage)
       # slicer.mrmlScene.AddNode(volumeNode)
       # volumeNode.CreateDefaultDisplayNodes()
-
-      # -0.452758 0.771055 -0.447754 -105.825
-      # 0.710518  0.00861362 -0.703626 -73.6986
-      # -0.538678 -0.63671 -0.551749 -53.5164
-      # 0    0      0      1
 
 
 
@@ -703,10 +709,13 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
           volumeNode.SetOrigin(Origin)
           slicer.mrmlScene.AddNode(volumeNode)
           volumeNode.CreateDefaultDisplayNodes()
+
       elif Orientation == 'oblique':
           Image = reslice.GetOutput()
           volumeNode = slicer.vtkMRMLScalarVolumeNode()
           volumeNode.SetName('ObliqueSlice')
           volumeNode.SetAndObserveImageData(Image)
+          volumeNode.SetSpacing(Spacing[0], Spacing[1], 1.0)
+          volumeNode.SetOrigin(Origin)
           slicer.mrmlScene.AddNode(volumeNode)
           volumeNode.CreateDefaultDisplayNodes()
