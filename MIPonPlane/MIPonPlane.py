@@ -179,8 +179,6 @@ class MIPonPlaneWidget(ScriptedLoadableModuleWidget):
     self.distanceValue, self.F = logic.calcDistance(self.FiducialsSelector.currentNode())
     self.distanceValueLabel.setText('%.3f' % self.distanceValue + ' millimeters')
     self.MRT = logic.run(self.F)
-    # self.VTKtransform = logic.numpyMatrixtoVTKtransform(self.MRT)
-    # logic.slice(self.inputSelector.currentNode(), 'sagittal', 80, self.VTKtransform)
 
   def ondistanceButton(self):
     logic = MIPonPlaneLogic()
@@ -193,8 +191,6 @@ class MIPonPlaneWidget(ScriptedLoadableModuleWidget):
     Slab = int(self.numberOfSlicesWidget.value)
     SpacingFraction = self.spacingFractionWidget.value
     self.reslice = logic.MipOnPlane(Slab, SpacingFraction)
-    #Origin = self.inputSelector.currentNode.GetOutputOrigin()
-    #print Origin
 
 
   def onRemoveMIP(self):
@@ -204,15 +200,11 @@ class MIPonPlaneWidget(ScriptedLoadableModuleWidget):
 
   def onExportMIPButton(self):
     logic = MIPonPlaneLogic()
-    self.distanceValue, self.F = logic.calcDistance(self.FiducialsSelector.currentNode())
-    self.MRT = logic.run(self.F)
-    self.VTKtransform = logic.numpyMatrixtoVTKtransform(self.MRT)
-    logic.slice(self.inputSelector.currentNode(), 'oblique', 80, self.VTKtransform)
+    Slab = int(self.numberOfSlicesWidget.value)
+    SpacingFraction = self.spacingFractionWidget.value
+    self.reslice = logic.MipOnPlane(Slab, SpacingFraction)
+    logic.ExctactSlice(self.reslice)
 
-    #logic.ExportMIP()
-    #Origin = self.inputSelector.currentNode().GetOrigin()
-    #logic.resliceVolume(self.inputSelector.currentNode(), self.VTKtransform)
-    #logic.slice(self.inputSelector.currentNode(), 'oblique', 50)
 
 #
 # MIPonPlaneLogic
@@ -313,12 +305,12 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
     redSlice = slicer.mrmlScene.GetNodeByID('vtkMRMLSliceNodeRed')
     redSlice.SetSliceToRAS(transformMatrix)
     redSlice.UpdateMatrices()
-    #lm = slicer.app.layoutManager()
-    #lm.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUpRedSliceView)
+    lm = slicer.app.layoutManager()
+    lm.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUpRedSliceView)
 
    #UNUSED#
 
-  def RotateVolume(self, linearTransformNode):
+  def RotateVolume(self):
 
     scene = slicer.mrmlScene
     inode = scene.GetNodeByID('vtkMRMLScalarVolumeNode1')
@@ -358,76 +350,16 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
     reslice.SetSlabSliceSpacingFraction(1) #default value
     sliceNode.Modified()
 
-  def ExctactSlice(self, inputVolume):
+  def ExctactSlice(self, reslice):
 
-    inputVolumeData = inputVolume.GetImageData()
-
-
-
-
-  def ExportMIP(self):
-    """
-    This function is to create a new volume containing the Xray and display in the Slicer Scene
-    """
-
-    #extract input volume information
-
-    # inputVolumeData = inputVolume.GetImageData()
-    #
-    # #reslice Filter
-    # resliceFilter = vtk.vtkImageReslice()
-    # resliceFilter.SetInputData(inputVolumeData)
-    #
-    # # #The Output dimensionality need to be fixed on '2' in order to extract a single slice.
-    # resliceFilter.SetOutputDimensionality(2)
-    # Spacing = inputVolume.GetSpacing()
-    # resliceFilter.SetOutputSpacing(Spacing[0],Spacing[1],Spacing[2])
-    # resliceFilter.SetSlabModeToMax()
-    # resliceFilter.SetSlabNumberOfSlices(50)
-    # resliceFilter.SetSlabSliceSpacingFraction(0.5)
-    # # # #set reslices axes origin in order to get the slice I want
-    # resliceFilter.SetResliceAxesOrigin(MRT[:3, 3])
-    # # #direction cosine for standard axial slice
-    # resliceFilter.SetResliceAxesDirectionCosines(MRT[:3, 0],MRT[:3, 1],MRT[:3, 2])
-    # #
-    # # # #Update the filter
-    # resliceFilter.Update()
-    #
-    # #Create a Volume and fill it with the resliceFilter Output
-    # Origin = inputVolume.GetOrigin()
-    # self.volumeNode = slicer.vtkMRMLScalarVolumeNode()
-    # self.volumeNode.SetSpacing(Spacing[0],Spacing[1],Spacing[2])
-    # inputVolume.SetImageDataConnection(resliceFilter.GetOutputPort())
-    # #self.volumeNode.SetIJKToRASMatrix(transformMatrix)
-    # self.volumeNode.SetOrigin(Origin)
-    # # self.imageData = self.volumeNode.GetImageData()
-    # # self.imageData.SetExtent(inputVolumeExtent[0], inputVolumeExtent[1], inputVolumeExtent[2], inputVolumeExtent[3], 0, 0)
-    #
-    #
-    # # Add volume to scene
-    # slicer.mrmlScene.AddNode(self.volumeNode)
-    # displayNode = slicer.vtkMRMLScalarVolumeDisplayNode()
-    # slicer.mrmlScene.AddNode(displayNode)
-    # colorNode = slicer.util.getNode('Grey')
-    # displayNode.SetAndObserveColorNodeID(colorNode.GetID())
-    # self.volumeNode.SetAndObserveDisplayNodeID(displayNode.GetID())
-    # self.volumeNode.CreateDefaultStorageNode()
-    # self.volumeNode.SetName('MIP')
-    # self.name = self.volumeNode.GetName()
-    #
-    # print "MIP extracted"
+      Image = reslice.GetOutput()
+      volumeNode = slicer.vtkMRMLScalarVolumeNode()
+      volumeNode.SetName('MIPSlice')
+      volumeNode.SetAndObserveImageData(Image)
+      slicer.mrmlScene.AddNode(volumeNode)
 
 
-    layoutName = 'Red'
-    imagePathPattern = '/tmp/Mip.png'
-    widget = slicer.app.layoutManager().sliceWidget(layoutName)
-    view = widget.sliceView()
-    logic = widget.sliceLogic()
-    sliceNode = slicer.mrmlScene.GetNodeByID('vtkMRMLSliceNodeRed')
-    offset = sliceNode.GetSliceOffset()
-    logic.SetSliceOffset(offset)
-    image = qt.QPixmap.grabWidget(view).toImage()
-    image.save(imagePathPattern)
+
 
 
   def volumeNodeFromVolArray(self, volArray, shape, vtkDataType, dimensions, volName, spacing):
@@ -457,104 +389,6 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
 
       return volumeNode
 
-  def resliceVolume(self, VolumeNode, transformMatrix):
-
-      image = VolumeNode.GetImageData()
-      resliceFilter = vtk.vtkImageReslice()
-      resliceFilter.SetInputData(image)
-
-      # The Output dimensionality need to be fixed on '2' in order to extract a single slice.
-      resliceFilter.SetOutputDimensionality(2)
-      #resliceFilter.SetOutputSpacing(1.0, 1.0, 1.0)
-      # set the output extent to 1024,1024,1
-      #inputVolumeExtent = image.GetExtent()
-      #resliceFilter.SetOutputExtent(inputVolumeExtent[0], inputVolumeExtent[1], inputVolumeExtent[2], inputVolumeExtent[3], 0, 0)
-      # set reslices axes origin in order to get the slice I want
-      Origin = image.GetOrigin()
-      print Origin
-      #resliceFilter.SetResliceAxesOrigin(Origin[0],Origin[1],Origin[2]+80)
-      #resliceFilter.SetResliceAxesOrigin(MRT[:3, 3])
-      # direction cosine for standard axial slice
-      teta=90
-      #resliceFilter.SetResliceAxesDirectionCosines(1.0, 0.0, 0.0, 0.0, numpy.cos(teta), -numpy.sin(teta), 0.0, numpy.sin(teta), numpy.cos(teta))
-      #resliceFilter.SetResliceAxesDirectionCosines(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
-      #resliceFilter.SetResliceAxesDirectionCosines(MRT[:3, 0],MRT[:3, 1],MRT[:3, 2])
-      (xMin, xMax, yMin, yMax, zMin, zMax) = image.GetExtent()
-      (xSpacing, ySpacing, zSpacing) = image.GetSpacing()
-      (x0, y0, z0) = image.GetOrigin()
-
-      center = [x0 + xSpacing * 0.5 * (xMin + xMax),
-                y0 + ySpacing * 0.5 * (yMin + yMax),
-                z0 + zSpacing * 0.5 * (zMin + zMax)]
-
-      sagittal = vtk.vtkMatrix4x4()
-      sagittal.DeepCopy((0, 0, -1, center[0],
-                         1, 0, 0, center[1],
-                         0, -1, 0, center[2],
-                         0, 0, 0, 1))
-      resliceFilter.SetResliceAxes(sagittal)
-
-      resliceFilter.SetSlabModeToMax()
-      resliceFilter.SetSlabNumberOfSlices(10)
-      print transformMatrix
-      #resliceFilter.SetResliceAxes(transformMatrix)
-      #resliceFilter.SetInterpolationModeToLinear()
-      resliceFilter.SetSlabModeToMax()
-      resliceFilter.SetSlabNumberOfSlices(50)
-      resliceFilter.SetSlabSliceSpacingFraction(0.5)
-
-      # Update the filter
-      resliceFilter.Update()
-
-      OutImage = vtk.vtkImageData()
-      OutImage = resliceFilter.GetOutput()
-      volumeNode = slicer.vtkMRMLScalarVolumeNode()
-      volumeNode.SetName('ResVolume')
-      volumeNode.SetAndObserveImageData(OutImage)
-      slicer.mrmlScene.AddNode(volumeNode)
-      volumeNode.CreateDefaultDisplayNodes()
-
-  def RotateresliceVolume(self, VolumeNode, MRT, Origin):
-
-        image = VolumeNode.GetImageData()
-        resliceFilter = vtk.vtkImageReslice()
-        resliceFilter.SetInputData(image)
-
-        # The Output dimensionality need to be fixed on '2' in order to extract a single slice.
-        resliceFilter.SetOutputDimensionality(2)
-        #resliceFilter.SetOutputSpacing(1.0, 1.0, 1.0)
-        # set the output extent to 1024,1024,1
-        # resliceFilter.SetOutputExtent(inputVolumeExtent[0], inputVolumeExtent[1], inputVolumeExtent[2], inputVolumeExtent[3], 0, 0)
-        # set reslices axes origin in order to get the slice I want
-        #resliceFilter.SetResliceAxesOrigin(Origin[0],Origin[1],Origin[2]+50)
-        # direction cosine for standard axial slice
-        (xMin, xMax, yMin, yMax, zMin, zMax) = image.GetExtent()
-        (xSpacing, ySpacing, zSpacing) = image.GetSpacing()
-        (x0, y0, z0) = image.GetOrigin()
-
-        center = [x0 + xSpacing * 0.5 * (xMin + xMax),
-                  y0 + ySpacing * 0.5 * (yMin + yMax),
-                  z0 + zSpacing * 0.5 * (zMin + zMax)]
-
-        sagittal = vtk.vtkMatrix4x4()
-        sagittal.DeepCopy((0, 0, -1, center[0],
-                           1, 0, 0, center[1],
-                           0, -1, 0, center[2],
-                           0, 0, 0, 1))
-        resliceFilter.SetResliceAxesDirectionCosines(sagittal)
-        resliceFilter.SetSlabModeToMax()
-        resliceFilter.SetSlabNumberOfSlices(10)
-
-        # Update the filter
-        resliceFilter.Update()
-
-        OutImage = vtk.vtkImageData()
-        OutImage = resliceFilter.GetOutput()
-        volumeNode = slicer.vtkMRMLScalarVolumeNode()
-        volumeNode.SetName('ResVolume')
-        volumeNode.SetAndObserveImageData(OutImage)
-        slicer.mrmlScene.AddNode(volumeNode)
-        volumeNode.CreateDefaultDisplayNodes()
 
   def numpyMatrixtoVTKtransform(self, numpyMatrix):
         transformMatrix = vtk.vtkMatrix4x4()
@@ -569,7 +403,7 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
 
         return transformMatrix
 
-  def slice(self, Volume, Orientation, slice, VTKtransform):
+  def slice(self, Volume, Orientation, slice, VTKtransform=None):
       # reader is the input VTK volume
       # Calculate the center of the volume
       ImageSet = Volume.GetImageData()
@@ -584,8 +418,6 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
 
 
       # Extract a slice in the desired orientation
-      #reslice.SetBlendModeToMax()
-      #reslice.SetResliceAxesOrigin(10, 20, 20)
       if Orientation == 'axial':
 
           axial = vtk.vtkMatrix4x4()
@@ -644,7 +476,7 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
           self.ViewReslice(COreslice,'coronal', Spacing, Origin)
 
       elif Orientation == 'oblique':
-          matrix = VTKtransform
+          #matrix = VTKtransform
           oblique = vtk.vtkMatrix4x4()
           oblique.DeepCopy((1, 0, 0, center[0], # matrix.GetElement(0,3)
                             0, 0.866025404, -0.5, center[1], #matrix.GetElement(1,3)
@@ -664,17 +496,6 @@ class MIPonPlaneLogic(ScriptedLoadableModuleLogic):
           OBreslice.Update()
           self.ViewReslice(OBreslice, 'oblique', Spacing, Origin)
 
-      #reslice.AutoCropOutputOn()
-      # reslice.SetSlabModeToMax()
-      # reslice.SetSlabNumberOfSlices(50)
-      # reslice.SetSlabSliceSpacingFraction(0.5)
-      # reslice.Update()
-      # NewImage = reslice.GetOutput()
-      # volumeNode = slicer.vtkMRMLScalarVolumeNode()
-      # volumeNode.SetName('ResVolume2')
-      # volumeNode.SetAndObserveImageData(NewImage)
-      # slicer.mrmlScene.AddNode(volumeNode)
-      # volumeNode.CreateDefaultDisplayNodes()
 
 
 
