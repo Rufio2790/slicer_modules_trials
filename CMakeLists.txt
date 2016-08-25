@@ -24,6 +24,7 @@ add_subdirectory(SaveFiducialList)
 add_subdirectory(vtkModel)
 add_subdirectory(surgeonEyeView)
 add_subdirectory(MIPonPlane)
+add_subdirectory(AnglePoints)
 ## NEXT_MODULE
 
 #-----------------------------------------------------------------------------
